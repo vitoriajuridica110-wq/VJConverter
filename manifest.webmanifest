@@ -1,0 +1,22 @@
+{
+  "name": "VJ Converter — Estúdio de PDF e Imagens",
+  "short_name": "VJ Converter",
+  "description": "Ferramentas de PDF e de imagem processadas dentro do seu próprio navegador, sem enviar arquivos para servidores.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f5f8",
+  "theme_color": "#e5322d",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Juntar PDF", "url": "./index.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Editar imagens", "url": "./img.html", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+  ]
+}

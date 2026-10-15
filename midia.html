@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VJ Mídia 1.0 — converter, cortar, extrair áudio e comprimir vídeo dentro do próprio navegador, sem enviar nada para servidor.">
+    <meta name="theme-color" content="#7c3aed">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <title>VJ Mídia 1.0 — Estúdio de Vídeo e Áudio no Navegador</title>
+
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!--
+      ffmpeg.wasm — núcleo de THREAD ÚNICA, de propósito.
+      A versão multi-thread é mais rápida, mas exige os cabeçalhos COOP/COEP,
+      que isolam a origem e quebrariam o carregamento das bibliotecas do
+      index.html e do img.html. Thread única custa velocidade e não custa nada
+      ao resto do site.
+    -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root[data-theme="light"] { --bg-main:#f6f5fb; --bg-surface:#ffffff; --bg-subtle:#efecf9; --text-main:#1e293b; --text-muted:#64748b; --border-color:#e4e2ef; --accent:#7c3aed; }
+        :root[data-theme="dark"] { --bg-main:#0b0f19; --bg-surface:#151c2c; --bg-subtle:#1e293b; --text-main:#f1f5f9; --text-muted:#94a3b8; --border-color:#263147; --accent:#8b5cf6; }
+        :root[data-theme="sepia"] { --bg-main:#f4ecd8; --bg-surface:#fdf6e3; --bg-subtle:#eee8d5; --text-main:#3c3024; --text-muted:#705e4a; --border-color:#dfd5be; --accent:#6d28d9; }
+        body { font-family:'Inter',sans-serif; background-color:var(--bg-main); color:var(--text-main); }
+        .theme-surface { background-color:var(--bg-surface); border-color:var(--border-color); color:var(--text-main); }
+        .theme-subtle { background-color:var(--bg-subtle); border-color:var(--border-color); color:var(--text-main); }
+        .theme-muted { color:var(--text-muted); }
+        .theme-input { background-color:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-main); }
+        .tool-card { background-color:var(--bg-surface); border:1px solid var(--border-color); transition:all 0.2s ease; }
+        .tool-card:hover { transform:translateY(-4px); box-shadow:0 12px 24px -6px rgba(0,0,0,0.1); border-color:var(--accent); }
+        .category-pill { background-color:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-main); }
+        .category-pill.active { background-color:var(--accent); border-color:var(--accent); color:#fff; }
+        .theme-btn.active { background-color:var(--accent); color:#fff; }
+        .option-card { border:2px solid var(--border-color); cursor:pointer; transition:all 0.15s ease; }
+        .option-card.selected { border-color:var(--accent); background-color:rgba(124,58,237,0.08); }
+        button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+        #ff-log { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; line-height:1.5; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- TOP NAVBAR -->
+    <header class="theme-surface border-b sticky top-0 z-40 shadow-sm h-14 flex items-center px-4 sm:px-6 justify-between">
+        <div class="flex items-center space-x-6">
+            <button type="button" onclick="showHome()" class="flex items-center space-x-2 focus:outline-none">
+                <div class="w-9 h-9 rounded-lg bg-[#7c3aed] flex items-center justify-center text-white font-extrabold text-lg shadow">VJ</div>
+                <div class="text-left">
+                    <span class="font-extrabold text-lg sm:text-xl tracking-tight block leading-none">VJ<span class="text-[#7c3aed]">Mídia</span></span>
+                    <span class="text-[9px] font-bold uppercase tracking-widest text-emerald-600">🔒 100% no seu aparelho</span>
+                </div>
+            </button>
+            <nav class="hidden xl:flex items-center space-x-5 text-xs font-bold tracking-wider uppercase">
+                <button type="button" onclick="openTool('convert-video')" class="hover:text-[#7c3aed]">Converter Vídeo</button>
+                <button type="button" onclick="openTool('compress-video')" class="hover:text-[#7c3aed]">Comprimir por MB</button>
+                <button type="button" onclick="openTool('trim')" class="hover:text-[#7c3aed]">Cortar Trecho</button>
+                <button type="button" onclick="openTool('extract-audio')" class="hover:text-[#7c3aed]">Extrair Áudio</button>
+            </nav>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <a href="index.html" class="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#e5322d] hover:bg-[#c92520] text-white shadow-sm flex items-center gap-1.5 transition"><span>📄 VJ PDF</span></a>
+            <a href="img.html" class="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#4d90fe] hover:bg-[#357ae8] text-white shadow-sm flex items-center gap-1.5 transition"><span>🖼️ VJ IMG</span></a>
+            <div class="flex items-center rounded-xl p-0.5 theme-subtle border text-xs">
+                <button type="button" onclick="setTheme('light')" id="theme-btn-light" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema claro">☀️</button>
+                <button type="button" onclick="setTheme('sepia')" id="theme-btn-sepia" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema sépia">📜</button>
+                <button type="button" onclick="setTheme('dark')" id="theme-btn-dark" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema escuro">🌙</button>
+            </div>
+            <button type="button" onclick="toggleDiagModal()" class="hidden sm:inline-block text-xs font-semibold px-2.5 py-1.5 rounded-lg theme-surface border">🩺 Motor</button>
+        </div>
+    </header>
+
+    <!-- HOME -->
+    <main id="home-view" class="flex-grow">
+        <section class="py-10 px-4 text-center max-w-4xl mx-auto">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 mb-3 border border-emerald-500/20">
+                🛡️ Seus vídeos não saem do seu computador. A conversão acontece dentro do navegador.
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2">Vídeo e áudio sem enviar nada para lugar nenhum</h1>
+            <p class="text-sm sm:text-base theme-muted max-w-2xl mx-auto">
+                Converter, cortar, extrair o áudio e comprimir para caber no limite de upload — com o FFmpeg rodando no seu próprio aparelho.
+            </p>
+            <div class="mt-5 max-w-2xl mx-auto p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-700 text-xs text-left leading-relaxed">
+                <strong>Antes de começar, duas coisas honestas:</strong> na primeira vez o motor de vídeo (cerca de 32 MB) é baixado e fica guardado — depois disso funciona offline.
+                E como tudo roda dentro do navegador, é mais lento que um programa instalado: um vídeo de 1 minuto costuma levar de 1 a 3 minutos. Para arquivos acima de uns 500 MB, prefira um programa de computador.
+            </div>
+            <div class="mt-7 flex flex-wrap items-center justify-center gap-2">
+                <button type="button" onclick="filterCategory('all')" data-cat="all" class="category-pill active px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Todos</button>
+                <button type="button" onclick="filterCategory('video')" data-cat="video" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Vídeo</button>
+                <button type="button" onclick="filterCategory('audio')" data-cat="audio" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Áudio</button>
+                <button type="button" onclick="filterCategory('otimizar')" data-cat="otimizar" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Otimizar</button>
+            </div>
+        </section>
+        <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
+            <div id="tools-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+        </section>
+    </main>
+
+    <!-- WORKSPACE -->
+    <section id="workspace-view" class="hidden flex-grow flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+        <div id="ws-initial-upload" class="flex-grow flex flex-col items-center justify-center p-6 text-center" ondragover="event.preventDefault()" ondrop="handleInitialDrop(event)">
+            <div id="ws-icon-box" class="w-16 h-16 rounded-2xl mb-4 flex items-center justify-center text-white shadow-lg"></div>
+            <h2 id="ws-title" class="text-3xl font-extrabold mb-2"></h2>
+            <p id="ws-desc" class="theme-muted max-w-xl mb-6 text-sm sm:text-base"></p>
+            <input type="file" id="ws-file-input" class="hidden" onchange="handleFileSelect(event)">
+            <button type="button" onclick="triggerFileInput()" class="bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-extrabold text-xl px-12 py-5 rounded-2xl shadow-xl transition transform hover:scale-105 mb-3">
+                Selecionar arquivo
+            </button>
+            <p class="text-xs theme-muted">ou arraste e solte aqui</p>
+            <button type="button" onclick="showHome()" class="mt-8 text-xs font-semibold theme-muted hover:underline">← Voltar a todas as ferramentas</button>
+        </div>
+
+        <div id="ws-studio-layout" class="hidden flex-grow flex flex-col lg:flex-row h-full overflow-hidden relative">
+            <div class="flex-grow h-full overflow-y-auto p-6" id="studio-left-canvas" ondragover="event.preventDefault()" ondrop="handleInitialDrop(event)">
+                <div class="mb-4">
+                    <button type="button" onclick="showHome()" class="text-xs font-bold px-3 py-1.5 rounded-lg theme-surface border shadow-sm hover:border-[#7c3aed]">← Todas as ferramentas</button>
+                </div>
+                <div id="studio-visual-stage" class="min-h-[300px] flex flex-col items-center justify-start gap-5"></div>
+
+                <div id="ws-result-area" class="hidden max-w-3xl mx-auto mt-6 mb-10 theme-surface border-2 border-emerald-500 rounded-2xl p-5 shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-3" style="border-color:var(--border-color);">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold text-lg">✓</div>
+                            <div>
+                                <h4 class="font-extrabold text-base text-emerald-600">Arquivo pronto!</h4>
+                                <p id="ws-stats-line" class="text-xs theme-muted font-semibold"></p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="reDownloadLast()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow">⬇ Baixar novamente</button>
+                    </div>
+                    <div id="ws-result-preview" class="flex justify-center"></div>
+                </div>
+            </div>
+
+            <aside class="w-full lg:w-[380px] shrink-0 theme-surface border-t lg:border-t-0 lg:border-l flex flex-col justify-between h-auto lg:h-full z-30 shadow-xl">
+                <div class="overflow-y-auto flex-grow">
+                    <div class="p-4 border-b text-center" style="border-color:var(--border-color);">
+                        <h3 id="sidebar-tool-title" class="text-lg font-extrabold"></h3>
+                    </div>
+                    <div id="sidebar-dynamic-controls" class="p-5 space-y-4 text-sm"></div>
+                </div>
+                <div class="p-5 border-t theme-surface" style="border-color:var(--border-color);">
+                    <button type="button" id="ws-execute-btn" onclick="executeActiveTool()" class="w-full bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-extrabold text-base py-4 px-6 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                        <span id="ws-execute-label">Processar</span> <span>▶</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Progresso -->
+            <div id="ws-progress-area" class="hidden absolute inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="theme-surface rounded-2xl max-w-lg w-full p-6 text-center shadow-2xl border">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-[#7c3aed] mb-3"></div>
+                    <p id="ws-progress-text" class="font-extrabold text-base">Processando...</p>
+                    <div class="w-full bg-slate-200 rounded-full h-2.5 mt-4 overflow-hidden">
+                        <div id="ws-progress-bar" class="bg-[#7c3aed] h-2.5 rounded-full transition-all duration-200" style="width:5%"></div>
+                    </div>
+                    <p class="text-[11px] theme-muted mt-3">Mantenha esta aba aberta. Converter vídeo no navegador é lento — é normal demorar vários minutos.</p>
+                    <details class="mt-3 text-left">
+                        <summary class="text-[11px] font-bold cursor-pointer theme-muted">Ver detalhes técnicos</summary>
+                        <div id="ff-log" class="mt-2 p-2 rounded-lg theme-subtle border max-h-32 overflow-y-auto theme-muted"></div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DIAGNÓSTICO -->
+    <div id="diag-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-lg w-full p-6 shadow-2xl border">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-extrabold">🩺 Diagnóstico do Motor</h3>
+                <button type="button" onclick="toggleDiagModal()" aria-label="Fechar">✕</button>
+            </div>
+            <div id="diag-list" class="space-y-2 text-xs max-h-80 overflow-y-auto"></div>
+            <div class="mt-5 flex justify-end"><button type="button" onclick="toggleDiagModal()" class="px-5 py-2 rounded-xl text-xs font-bold bg-[#7c3aed] text-white">Fechar</button></div>
+        </div>
+    </div>
+
+    <footer class="theme-surface border-t py-4 px-4 text-center text-xs theme-muted">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p>© 2026 <strong>VJ Mídia 1.0</strong> — FFmpeg rodando no seu navegador. Nenhum arquivo é enviado a servidores.</p>
+            <div class="flex gap-3">
+                <a href="index.html" class="text-[#e5322d] font-bold hover:underline">📄 VJ Converter</a>
+                <a href="img.html" class="text-[#4d90fe] font-bold hover:underline">🖼️ VJ IMG</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        const NL = String.fromCharCode(10);
+
+        /* ==================== CDN COM REDE DE SEGURANÇA ==================== */
+        const CDN_FALLBACKS = [
+            { check: () => window.tailwind, url: 'https://cdn.tailwindcss.com' },
+            { check: () => window.lucide, url: 'https://unpkg.com/lucide@latest' }
+        ];
+        function loadFallbacks() {
+            CDN_FALLBACKS.forEach(f => {
+                if (f.check()) return;
+                const s = document.createElement('script');
+                s.src = f.url;
+                s.onload = () => { if (window.lucide) refreshIcons(); };
+                document.head.appendChild(s);
+            });
+        }
+
+        // Núcleo de thread única: não exige SharedArrayBuffer nem COOP/COEP.
+        const CORE_BASE = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+        const FFMPEG_BASE = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
+        // Pedaço do ffmpeg que vira o Worker. Precisa ser baixado e transformado
+        // em blob local: o navegador proíbe criar Worker a partir de um script
+        // hospedado em outro domínio, mesmo em HTTPS.
+        const FFMPEG_WORKER_CHUNK = FFMPEG_BASE + '/814.ffmpeg.js';
+
+        const isFileProtocol = (location.protocol === 'file:');
+
+        /* ==================== CATÁLOGO ==================== */
+        const TOOLS = [
+            { id:'convert-video', title:'Converter vídeo', desc:'Troque o formato do vídeo (MP4, WEBM, MKV, MOV, AVI) mantendo a qualidade.', cat:'video', icon:'film', color:'bg-violet-600', accept:'video/*', btnLabel:'Converter vídeo' },
+            { id:'compress-video', title:'Comprimir até X MB', desc:'Informe o limite de upload e o programa calcula a taxa de bits para o vídeo caber nele.', cat:'otimizar', icon:'minimize-2', color:'bg-emerald-600', badge:'Alvo em MB', accept:'video/*', btnLabel:'Comprimir vídeo' },
+            { id:'trim', title:'Cortar trecho', desc:'Guarde só o pedaço que interessa, marcando início e fim. Sem recodificar, fica pronto em segundos.', cat:'video', icon:'scissors', color:'bg-pink-600', accept:'video/*,audio/*', btnLabel:'Cortar trecho' },
+            { id:'extract-audio', title:'Extrair áudio', desc:'Tire a trilha de áudio de um vídeo e salve em MP3, M4A ou WAV.', cat:'audio', icon:'music', color:'bg-amber-600', accept:'video/*', btnLabel:'Extrair áudio' },
+            { id:'convert-audio', title:'Converter áudio', desc:'Converta entre MP3, WAV, M4A e OGG, escolhendo a taxa de bits.', cat:'audio', icon:'audio-lines', color:'bg-orange-600', accept:'audio/*', btnLabel:'Converter áudio' },
+            { id:'mute', title:'Remover o áudio', desc:'Deixe o vídeo mudo sem recodificar a imagem — rápido e sem perda.', cat:'video', icon:'volume-x', color:'bg-slate-600', accept:'video/*', btnLabel:'Remover áudio' },
+            { id:'to-gif', title:'Vídeo para GIF', desc:'Transforme um trecho curto em GIF animado, com paleta otimizada.', cat:'video', icon:'image-play', color:'bg-cyan-600', accept:'video/*', btnLabel:'Gerar GIF' },
+            { id:'resize-video', title:'Redimensionar vídeo', desc:'Mude a resolução (1080p, 720p, 480p) ou recorte para o formato vertical 9:16.', cat:'otimizar', icon:'scaling', color:'bg-indigo-600', accept:'video/*', btnLabel:'Redimensionar' }
+        ];
+
+        /* ==================== ESTADO ==================== */
+        let activeTool = null;
+        let selectedFile = null;
+        let mediaInfo = { duration:0, width:0, height:0, hasAudio:true };
+        let lastBlob = null, lastName = '';
+        let ffmpeg = null, ffmpegLoaded = false, ffmpegLoading = null;
+
+        let state = {
+            videoFormat:'mp4',
+            targetMB:25,
+            trimStart:0, trimEnd:0, trimPrecise:false,
+            audioFormat:'mp3', audioBitrate:'192k',
+            gifFps:12, gifWidth:480, gifStart:0, gifDur:5,
+            resizeMode:'720', vertical:false
+        };
+
+        function refreshIcons() { if (window.lucide && window.lucide.createIcons) lucide.createIcons(); }
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m])); }
+        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+        function setTheme(t) {
+            document.documentElement.setAttribute('data-theme', t);
+            try { localStorage.setItem('vj_theme', t); } catch (e) {}
+            ['light', 'sepia', 'dark'].forEach(x => {
+                const b = document.getElementById('theme-btn-' + x);
+                if (b) b.classList.toggle('active', x === t);
+            });
+        }
+
+        function setProgress(pct, msg) {
+            const bar = document.getElementById('ws-progress-bar');
+            if (bar) bar.style.width = clamp(pct, 3, 100) + '%';
+            if (msg) document.getElementById('ws-progress-text').textContent = msg;
+        }
+        function logLine(txt) {
+            const box = document.getElementById('ff-log');
+            if (!box) return;
+            const d = document.createElement('div');
+            d.textContent = txt;
+            box.appendChild(d);
+            while (box.childNodes.length > 200) box.removeChild(box.firstChild);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function formatTime(sec) {
+            sec = Math.max(0, sec || 0);
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+            const pad = (n) => (n < 10 ? '0' : '') + Math.floor(n);
+            return (h > 0 ? pad(h) + ':' : '') + pad(m) + ':' + pad(s);
+        }
+        function toFFTime(sec) {
+            const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = (sec % 60);
+            const p2 = (n) => (n < 10 ? '0' : '') + Math.floor(n);
+            return p2(h) + ':' + p2(m) + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
+        }
+        function mb(bytes) { return (bytes / (1024 * 1024)).toFixed(2); }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFallbacks();
+            let saved = 'light';
+            try { saved = localStorage.getItem('vj_theme') || 'light'; } catch (e) {}
+            setTheme(saved);
+            renderToolsGrid('all');
+            if ('serviceWorker' in navigator && location.protocol === 'https:') {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            }
+            if (isFileProtocol) {
+                // O manifesto não carrega do disco e só gera erro no console.
+                const link = document.querySelector('link[rel="manifest"]');
+                if (link) link.remove();
+                mostrarAvisoArquivoLocal();
+            }
+            refreshIcons();
+        });
+
+        // Aviso grande e claro quando a página é aberta por clique duplo.
+        function mostrarAvisoArquivoLocal() {
+            const alvo = document.querySelector('#home-view section');
+            if (!alvo) return;
+            const bar = document.createElement('div');
+            bar.className = 'max-w-3xl mx-auto mt-6 p-4 rounded-xl bg-red-500/10 border-2 border-red-500/50 text-left';
+            bar.innerHTML =
+                '<p class="font-extrabold text-red-600 text-sm mb-2">⚠️ Esta página foi aberta direto do computador — o VJ Mídia não vai funcionar assim.</p>' +
+                '<p class="text-xs leading-relaxed theme-muted mb-2">O endereço começa com <code>file:///</code>. Nesse modo o navegador proíbe criar os "Workers" que o motor de vídeo precisa, por segurança. Não há como contornar pelo código.</p>' +
+                '<p class="text-xs leading-relaxed theme-muted"><strong>O que fazer:</strong> abra o site pelo endereço publicado (<code>https://...</code>). Se quiser testar antes de publicar, abra o Prompt de Comando na pasta do projeto e rode <code class="px-1 py-0.5 rounded theme-subtle border">npx serve</code>, depois acesse o endereço <code>http://localhost:3000</code> que ele mostrar.</p>' +
+                '<p class="text-xs leading-relaxed theme-muted mt-2">O mesmo vale para o <strong>OCR</strong> do VJ Converter e a <strong>IA de remover fundo</strong> do VJ IMG: também precisam de endereço web.</p>';
+            alvo.appendChild(bar);
+        }
+
+        /* ==================== CARREGAMENTO DO FFMPEG ==================== */
+        async function ensureFfmpeg() {
+            if (ffmpegLoaded) return ffmpeg;
+            if (ffmpegLoading) return ffmpegLoading;
+
+            ffmpegLoading = (async () => {
+                const FFmpegNS = window.FFmpegWASM || window.FFmpeg;
+                const UtilNS = window.FFmpegUtil || window.FFmpegUtils;
+                if (!FFmpegNS || !FFmpegNS.FFmpeg) {
+                    throw new Error('O motor de vídeo não carregou. Verifique sua conexão, recarregue a página (Ctrl+Shift+R) e tente de novo.');
+                }
+                if (!UtilNS || !UtilNS.toBlobURL) {
+                    throw new Error('A biblioteca auxiliar do motor de vídeo não carregou. Recarregue a página e tente de novo.');
+                }
+
+                if (isFileProtocol) {
+                    throw new Error('Esta página foi aberta direto do seu computador (endereço começando com file:///).' + NL + NL +
+                        'O motor de vídeo precisa criar um "Worker", e o navegador proíbe isso em arquivos abertos do disco. Publique o site e use o endereço https, ou rode um servidor local (as instruções estão na própria tela).');
+                }
+
+                setProgress(8, 'Baixando o motor de vídeo (cerca de 32 MB, só na primeira vez)...');
+                ffmpeg = new FFmpegNS.FFmpeg();
+                ffmpeg.on('log', (e) => logLine(e.message));
+                ffmpeg.on('progress', (e) => {
+                    if (e && typeof e.progress === 'number' && e.progress > 0 && e.progress <= 1) {
+                        setProgress(15 + e.progress * 80, 'Processando... ' + Math.round(e.progress * 100) + '%');
+                    }
+                });
+
+                // Tudo precisa virar blob local, senão o Worker é barrado por
+                // ser de outra origem. Isso vale para o núcleo E para o pedaço
+                // do próprio ffmpeg que roda dentro do Worker.
+                const coreURL = await UtilNS.toBlobURL(CORE_BASE + '/ffmpeg-core.js', 'text/javascript');
+                const wasmURL = await UtilNS.toBlobURL(CORE_BASE + '/ffmpeg-core.wasm', 'application/wasm');
+
+                let classWorkerURL = null;
+                try {
+                    classWorkerURL = await UtilNS.toBlobURL(FFMPEG_WORKER_CHUNK, 'text/javascript');
+                } catch (e) {
+                    // Se o nome do pedaço mudar numa versão futura, segue sem ele:
+                    // funciona quando a biblioteca está no mesmo domínio da página.
+                    logLine('Aviso: não consegui preparar o worker local (' + e.message + '). Tentando do jeito padrão.');
+                }
+
+                setProgress(11, 'Iniciando o motor...');
+                const opcoes = { coreURL, wasmURL };
+                if (classWorkerURL) opcoes.classWorkerURL = classWorkerURL;
+                try {
+                    await ffmpeg.load(opcoes);
+                } catch (e) {
+                    // Última tentativa, sem o worker local.
+                    if (!classWorkerURL) throw e;
+                    logLine('Primeira tentativa falhou (' + e.message + '). Tentando sem o worker local...');
+                    ffmpeg = new FFmpegNS.FFmpeg();
+                    ffmpeg.on('log', (ev) => logLine(ev.message));
+                    await ffmpeg.load({ coreURL, wasmURL });
+                }
+                ffmpegLoaded = true;
+                setProgress(14, 'Motor pronto. Começando...');
+                return ffmpeg;
+            })().catch(err => { ffmpegLoading = null; throw err; });
+
+            return ffmpegLoading;
+        }
+
+        /* ==================== CATÁLOGO E NAVEGAÇÃO ==================== */
+        function renderToolsGrid(cat) {
+            const grid = document.getElementById('tools-grid');
+            grid.innerHTML = '';
+            (cat === 'all' ? TOOLS : TOOLS.filter(t => t.cat === cat)).forEach(tool => {
+                const badge = tool.badge ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-violet-500/15 text-violet-600">' + escapeHtml(tool.badge) + '</span>' : '';
+                const card = document.createElement('div');
+                card.className = 'tool-card rounded-2xl p-5 cursor-pointer flex flex-col justify-between';
+                card.setAttribute('role', 'button');
+                card.setAttribute('tabindex', '0');
+                card.onclick = () => openTool(tool.id);
+                card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTool(tool.id); } };
+                card.innerHTML = '<div><div class="flex items-start justify-between mb-3"><div class="w-11 h-11 rounded-xl ' + tool.color + ' text-white flex items-center justify-center shadow-sm"><i data-lucide="' + tool.icon + '" class="w-5 h-5"></i></div>' + badge + '</div><h3 class="font-bold text-base mb-1">' + escapeHtml(tool.title) + '</h3><p class="text-xs theme-muted leading-relaxed">' + escapeHtml(tool.desc) + '</p></div>';
+                grid.appendChild(card);
+            });
+            refreshIcons();
+        }
+
+        function filterCategory(cat) {
+            showHome();
+            document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+            renderToolsGrid(cat);
+        }
+
+        function showHome() {
+            document.getElementById('home-view').classList.remove('hidden');
+            document.getElementById('workspace-view').classList.add('hidden');
+            activeTool = null;
+            selectedFile = null;
+        }
+
+        function openTool(id) {
+            activeTool = TOOLS.find(t => t.id === id);
+            if (!activeTool) return;
+            selectedFile = null;
+            document.getElementById('home-view').classList.add('hidden');
+            document.getElementById('workspace-view').classList.remove('hidden');
+            document.getElementById('ws-result-area').classList.add('hidden');
+
+            const iconBox = document.getElementById('ws-icon-box');
+            iconBox.className = 'w-16 h-16 rounded-2xl mb-4 flex items-center justify-center text-white shadow-lg ' + activeTool.color;
+            iconBox.innerHTML = '<i data-lucide="' + activeTool.icon + '" class="w-8 h-8"></i>';
+            document.getElementById('ws-title').textContent = activeTool.title;
+            document.getElementById('ws-desc').textContent = activeTool.desc;
+
+            const input = document.getElementById('ws-file-input');
+            input.accept = activeTool.accept;
+            input.value = '';
+
+            document.getElementById('ws-initial-upload').classList.remove('hidden');
+            document.getElementById('ws-studio-layout').classList.add('hidden');
+            refreshIcons();
+        }
+
+        function triggerFileInput() { document.getElementById('ws-file-input').click(); }
+        function handleFileSelect(e) { if (e.target.files && e.target.files[0]) loadFile(e.target.files[0]); }
+        function handleInitialDrop(e) {
+            e.preventDefault();
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+        }
+
+        // Lê duração e dimensões pelo próprio navegador, antes de acordar o FFmpeg.
+        function probeMedia(file) {
+            return new Promise((resolve) => {
+                const isVideo = file.type.indexOf('video') === 0;
+                const el = document.createElement(isVideo ? 'video' : 'audio');
+                const url = URL.createObjectURL(file);
+                let done = false;
+                const finish = (info) => {
+                    if (done) return;
+                    done = true;
+                    URL.revokeObjectURL(url);
+                    resolve(info);
+                };
+                el.preload = 'metadata';
+                el.onloadedmetadata = () => finish({
+                    duration: isFinite(el.duration) ? el.duration : 0,
+                    width: el.videoWidth || 0,
+                    height: el.videoHeight || 0,
+                    hasAudio: true
+                });
+                el.onerror = () => finish({ duration:0, width:0, height:0, hasAudio:true });
+                setTimeout(() => finish({ duration:0, width:0, height:0, hasAudio:true }), 8000);
+                el.src = url;
+            });
+        }
+
+        async function loadFile(file) {
+            if (file.size > 800 * 1024 * 1024) {
+                if (!confirm('Este arquivo tem ' + mb(file.size) + ' MB. Arquivos muito grandes podem travar o navegador por falta de memória.' + NL + NL + 'Quer tentar mesmo assim?')) return;
+            }
+            selectedFile = file;
+            mediaInfo = await probeMedia(file);
+
+            state.trimStart = 0;
+            state.trimEnd = mediaInfo.duration || 0;
+            state.gifStart = 0;
+            state.gifDur = Math.min(5, mediaInfo.duration || 5);
+            if (mediaInfo.duration > 0) {
+                // Sugere um alvo plausível: metade do tamanho atual, no mínimo 5 MB.
+                state.targetMB = Math.max(5, Math.round((file.size / (1024 * 1024)) / 2));
+            }
+
+            document.getElementById('ws-initial-upload').classList.add('hidden');
+            document.getElementById('ws-studio-layout').classList.remove('hidden');
+            document.getElementById('sidebar-tool-title').textContent = activeTool.title;
+            document.getElementById('ws-execute-label').textContent = activeTool.btnLabel;
+            document.getElementById('ws-result-area').classList.add('hidden');
+
+            renderStage();
+            renderSidebar();
+            refreshIcons();
+        }
+
+        function renderStage() {
+            const stage = document.getElementById('studio-visual-stage');
+            stage.innerHTML = '';
+            if (!selectedFile) return;
+
+            const card = document.createElement('div');
+            card.className = 'theme-surface border rounded-2xl p-4 shadow-lg w-full max-w-2xl';
+
+            const isVideo = selectedFile.type.indexOf('video') === 0;
+            const media = document.createElement(isVideo ? 'video' : 'audio');
+            media.id = 'preview-media';
+            media.src = URL.createObjectURL(selectedFile);
+            media.controls = true;
+            media.className = isVideo ? 'w-full max-h-[46vh] rounded-xl bg-black' : 'w-full';
+            card.appendChild(media);
+
+            const info = document.createElement('div');
+            info.className = 'mt-3 flex flex-wrap items-center gap-2 text-[11px] font-bold';
+            info.innerHTML =
+                '<span class="px-2 py-1 rounded bg-slate-800 text-white truncate max-w-[220px]">' + escapeHtml(selectedFile.name) + '</span>' +
+                '<span class="px-2 py-1 rounded theme-subtle border">' + mb(selectedFile.size) + ' MB</span>' +
+                (mediaInfo.duration ? '<span class="px-2 py-1 rounded theme-subtle border">' + formatTime(mediaInfo.duration) + '</span>' : '') +
+                (mediaInfo.width ? '<span class="px-2 py-1 rounded theme-subtle border">' + mediaInfo.width + ' x ' + mediaInfo.height + '</span>' : '') +
+                '<button type="button" onclick="triggerFileInput()" class="px-2 py-1 rounded bg-[#7c3aed] text-white">Trocar arquivo</button>';
+            card.appendChild(info);
+            stage.appendChild(card);
+
+            if (['trim', 'to-gif'].indexOf(activeTool.id) >= 0 && mediaInfo.duration > 0) {
+                const tip = document.createElement('p');
+                tip.className = 'text-[11px] theme-muted text-center max-w-xl';
+                tip.textContent = 'Dica: dê play acima, pause no ponto desejado e use os botões "usar o tempo atual" na barra lateral.';
+                stage.appendChild(tip);
+            }
+        }
+
+        /* ==================== BARRA LATERAL ==================== */
+        function renderSidebar() {
+            const box = document.getElementById('sidebar-dynamic-controls');
+            box.innerHTML = '';
+            if (!activeTool || !selectedFile) return;
+            const dur = mediaInfo.duration || 0;
+
+            if (activeTool.id === 'convert-video') {
+                box.innerHTML =
+                    '<label class="block text-xs font-bold mb-1" for="vf">Formato de saída:</label>' +
+                    '<select id="vf" onchange="VJ.set(\'videoFormat\',this.value)" class="w-full rounded-lg theme-input p-2.5 text-xs font-bold">' +
+                    ['mp4', 'webm', 'mkv', 'mov', 'avi'].map(f => '<option value="' + f + '"' + (state.videoFormat === f ? ' selected' : '') + '>' + f.toUpperCase() + '</option>').join('') +
+                    '</select>' +
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">MP4 é o formato que funciona em praticamente tudo. WEBM gera arquivos menores, mas alguns programas antigos não abrem.</div>';
+                return;
+            }
+
+            if (activeTool.id === 'compress-video') {
+                const atual = selectedFile.size / (1024 * 1024);
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-xs leading-relaxed">O tamanho final de um vídeo é, na prática, a taxa de bits multiplicada pela duração. Sabendo o alvo e a duração, dá para calcular a taxa — é isso que esta ferramenta faz.</div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="tmb">Peso máximo (MB):</label>' +
+                    '<input type="number" id="tmb" min="1" step="1" value="' + state.targetMB + '" oninput="VJ.set(\'targetMB\',this.value)" class="w-full rounded-lg theme-input p-2.5 text-center font-extrabold text-base"></div>' +
+                    '<div class="grid grid-cols-4 gap-1.5">' +
+                    [8, 16, 25, 50].map(v => '<button type="button" onclick="VJ.set(\'targetMB\',' + v + ',true)" class="py-2 rounded-lg text-[11px] font-bold border ' + (Number(state.targetMB) === v ? 'border-[#7c3aed] text-[#7c3aed] bg-violet-500/10' : 'theme-subtle') + '">' + v + ' MB</button>').join('') +
+                    '</div>' +
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">Arquivo atual: <strong>' + atual.toFixed(2) + ' MB</strong>' +
+                    (dur ? ' • duração <strong>' + formatTime(dur) + '</strong><br>Taxa de bits calculada: <strong>' + estimateBitrateKbps() + ' kbps</strong>' : '') +
+                    '</div>' +
+                    (dur === 0 ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700">Não consegui ler a duração deste arquivo, então não dá para calcular a taxa de bits. Tente converter para MP4 primeiro.</div>' : '');
+                return;
+            }
+
+            if (activeTool.id === 'trim') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">O corte é feito <strong>sem recodificar</strong>: fica pronto em segundos e não perde qualidade. Em troca, o corte só pode cair num quadro-chave, então pode ficar alguns décimos deslocado.</div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="ts">Início: <span id="lbl-ts">' + formatTime(state.trimStart) + '</span></label>' +
+                    '<input type="range" id="ts" min="0" max="' + Math.max(1, Math.floor(dur)) + '" step="1" value="' + Math.floor(state.trimStart) + '" oninput="VJ.setTrim(\'trimStart\',this.value)" class="w-full accent-[#7c3aed]">' +
+                    '<button type="button" onclick="VJ.useCurrentTime(\'trimStart\')" class="w-full mt-1 py-1.5 rounded-lg theme-subtle border text-[11px] font-bold">⏱️ Usar o tempo atual do player</button></div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="te">Fim: <span id="lbl-te">' + formatTime(state.trimEnd) + '</span></label>' +
+                    '<input type="range" id="te" min="0" max="' + Math.max(1, Math.ceil(dur)) + '" step="1" value="' + Math.ceil(state.trimEnd) + '" oninput="VJ.setTrim(\'trimEnd\',this.value)" class="w-full accent-[#7c3aed]">' +
+                    '<button type="button" onclick="VJ.useCurrentTime(\'trimEnd\')" class="w-full mt-1 py-1.5 rounded-lg theme-subtle border text-[11px] font-bold">⏱️ Usar o tempo atual do player</button></div>' +
+                    '<div class="p-2.5 rounded-xl theme-subtle border text-center text-[11px] font-bold">Trecho: <span id="lbl-trimdur" class="text-[#7c3aed]">' + formatTime(Math.max(0, state.trimEnd - state.trimStart)) + '</span></div>' +
+                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (state.trimPrecise ? 'checked' : '') + ' onchange="VJ.set(\'trimPrecise\',this.checked)" class="mt-0.5 accent-violet-600"><span><strong>Corte exato no segundo</strong> — recodifica o vídeo, então demora bem mais, mas começa no ponto certo</span></label>';
+                return;
+            }
+
+            if (activeTool.id === 'extract-audio' || activeTool.id === 'convert-audio') {
+                const fmts = activeTool.id === 'extract-audio' ? ['mp3', 'm4a', 'wav'] : ['mp3', 'wav', 'm4a', 'ogg'];
+                box.innerHTML =
+                    '<label class="block text-xs font-bold mb-1" for="af">Formato:</label>' +
+                    '<select id="af" onchange="VJ.set(\'audioFormat\',this.value)" class="w-full rounded-lg theme-input p-2.5 text-xs font-bold">' +
+                    fmts.map(f => '<option value="' + f + '"' + (state.audioFormat === f ? ' selected' : '') + '>' + f.toUpperCase() + '</option>').join('') +
+                    '</select>' +
+                    (state.audioFormat === 'wav' ? '<div class="p-3 rounded-xl theme-subtle border text-[11px]">WAV não tem compressão: a qualidade é máxima e o arquivo fica grande.</div>'
+                        : '<div><label class="block text-xs font-bold mb-1" for="ab">Qualidade:</label>' +
+                          '<select id="ab" onchange="VJ.set(\'audioBitrate\',this.value)" class="w-full rounded-lg theme-input p-2.5 text-xs font-bold">' +
+                          [['320k', 'Máxima (320 kbps)'], ['192k', 'Alta (192 kbps)'], ['128k', 'Média (128 kbps)'], ['64k', 'Voz / podcast (64 kbps)']]
+                              .map(o => '<option value="' + o[0] + '"' + (state.audioBitrate === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+                          '</select></div>');
+                return;
+            }
+
+            if (activeTool.id === 'mute') {
+                box.innerHTML = '<div class="p-3 rounded-xl theme-subtle border text-xs leading-relaxed">A trilha de áudio é descartada e a imagem é copiada como está, sem recodificar. É quase instantâneo, mesmo em vídeo longo.</div>';
+                return;
+            }
+
+            if (activeTool.id === 'to-gif') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">GIF é um formato pesado: cada segundo custa caro em megabytes. Prefira trechos de até 10 segundos.</div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="gs">Começar em: <span id="lbl-gs">' + formatTime(state.gifStart) + '</span></label>' +
+                    '<input type="range" id="gs" min="0" max="' + Math.max(1, Math.floor(dur)) + '" step="1" value="' + Math.floor(state.gifStart) + '" oninput="VJ.setGif(\'gifStart\',this.value)" class="w-full accent-[#7c3aed]">' +
+                    '<button type="button" onclick="VJ.useCurrentTime(\'gifStart\')" class="w-full mt-1 py-1.5 rounded-lg theme-subtle border text-[11px] font-bold">⏱️ Usar o tempo atual do player</button></div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="gd">Duração: <span id="lbl-gd">' + state.gifDur + 's</span></label>' +
+                    '<input type="range" id="gd" min="1" max="20" step="1" value="' + state.gifDur + '" oninput="VJ.setGif(\'gifDur\',this.value)" class="w-full accent-[#7c3aed]"></div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="gw">Largura:</label>' +
+                    '<select id="gw" onchange="VJ.set(\'gifWidth\',this.value)" class="w-full rounded-lg theme-input p-2 text-xs font-bold">' +
+                    [[320, 'Pequeno (320 px)'], [480, 'Médio (480 px)'], [640, 'Grande (640 px)']].map(o => '<option value="' + o[0] + '"' + (Number(state.gifWidth) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+                    '</select></div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="gf">Quadros por segundo:</label>' +
+                    '<select id="gf" onchange="VJ.set(\'gifFps\',this.value)" class="w-full rounded-lg theme-input p-2 text-xs font-bold">' +
+                    [[8, '8 (menor arquivo)'], [12, '12 (equilibrado)'], [20, '20 (mais fluido)']].map(o => '<option value="' + o[0] + '"' + (Number(state.gifFps) === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+                    '</select></div>';
+                return;
+            }
+
+            if (activeTool.id === 'resize-video') {
+                box.innerHTML =
+                    '<label class="block text-xs font-bold mb-1" for="rs">Resolução:</label>' +
+                    '<select id="rs" onchange="VJ.set(\'resizeMode\',this.value)" class="w-full rounded-lg theme-input p-2.5 text-xs font-bold">' +
+                    [['1080', '1080p (Full HD)'], ['720', '720p (HD)'], ['480', '480p (leve)'], ['360', '360p (muito leve)']]
+                        .map(o => '<option value="' + o[0] + '"' + (state.resizeMode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+                    '</select>' +
+                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (state.vertical ? 'checked' : '') + ' onchange="VJ.set(\'vertical\',this.checked)" class="mt-0.5 accent-violet-600"><span><strong>Recortar para 9:16 (vertical)</strong> — corta as laterais e deixa no formato de Reels, Shorts e TikTok</span></label>' +
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">A altura é calculada sozinha para manter a proporção. Vídeos já menores que a resolução escolhida não são ampliados.</div>';
+                return;
+            }
+        }
+
+        function estimateBitrateKbps() {
+            const dur = mediaInfo.duration || 0;
+            if (!dur) return 0;
+            const alvoBits = Math.max(1, Number(state.targetMB)) * 1024 * 1024 * 8;
+            // Guarda 6% de folga para o contêiner e reserva o áudio.
+            const audioKbps = 128;
+            const total = (alvoBits * 0.94) / dur / 1000;
+            return Math.max(100, Math.round(total - audioKbps));
+        }
+
+        /* ==================== EXECUÇÃO ==================== */
+        async function executeActiveTool() {
+            if (!selectedFile) { alert('Escolha um arquivo primeiro.'); return; }
+            const prog = document.getElementById('ws-progress-area');
+            document.getElementById('ff-log').innerHTML = '';
+            document.getElementById('ws-result-area').classList.add('hidden');
+            prog.classList.remove('hidden');
+            setProgress(5, 'Preparando...');
+
+            const inName = 'entrada' + (selectedFile.name.match(/\.[^.]+$/) || ['.bin'])[0];
+            let outName = '';
+
+            try {
+                const ff = await ensureFfmpeg();
+                const UtilNS = window.FFmpegUtil || window.FFmpegUtils;
+
+                setProgress(14, 'Carregando o arquivo na memória...');
+                await ff.writeFile(inName, await UtilNS.fetchFile(selectedFile));
+
+                const plano = buildCommand(inName);
+                outName = plano.out;
+                setProgress(16, plano.msg || 'Processando...');
+                logLine('ffmpeg ' + plano.args.join(' '));
+
+                await ff.exec(plano.args);
+
+                setProgress(97, 'Lendo o resultado...');
+                const data = await ff.readFile(outName);
+                if (!data || !data.length) throw new Error('O processamento terminou sem gerar conteúdo. Veja os detalhes técnicos para entender o motivo.');
+                const blob = new Blob([data.buffer || data], { type: plano.mime });
+
+                // Limpa a memória virtual do FFmpeg para o próximo arquivo.
+                try { await ff.deleteFile(inName); await ff.deleteFile(outName); } catch (e) {}
+
+                finishWith(blob, plano.filename, plano.nota);
+            } catch (err) {
+                console.error(err);
+                alert(friendlyError(err));
+            } finally {
+                prog.classList.add('hidden');
+            }
+        }
+
+        function friendlyError(err) {
+            const m = String((err && err.message) || err);
+            if (/não carregou|not load|importScripts/i.test(m)) return m;
+            if (/memory|allocation|out of bounds|RangeError/i.test(m)) {
+                return 'O navegador ficou sem memória para este arquivo.' + NL + NL + 'Tente um trecho menor (ferramenta Cortar), ou reduza a resolução antes de converter.';
+            }
+            if (/Invalid data|moov|format/i.test(m)) {
+                return 'Não consegui entender este arquivo de mídia. Ele pode estar incompleto ou num formato incomum.' + NL + NL + 'Detalhe técnico: ' + m;
+            }
+            return 'Não consegui concluir esta operação.' + NL + NL + 'Detalhe técnico: ' + m + NL + NL + 'Abra "Ver detalhes técnicos" na janela de progresso para a mensagem completa do FFmpeg.';
+        }
+
+        // Monta a linha de comando do FFmpeg para a ferramenta ativa.
+        function buildCommand(inName) {
+            const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
+            const id = activeTool.id;
+
+            if (id === 'convert-video') {
+                const f = state.videoFormat;
+                const out = 'saida.' + f;
+                const args = ['-i', inName];
+                if (f === 'webm') args.push('-c:v', 'libvpx', '-b:v', '1M', '-c:a', 'libvorbis');
+                else args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-c:a', 'aac', '-b:a', '160k');
+                args.push('-y', out);
+                // Evita devolver um arquivo com exatamente o mesmo nome do original.
+                const mesmaExt = new RegExp('\\.' + f + '$', 'i').test(selectedFile.name);
+                return {
+                    args, out,
+                    filename: baseName + (mesmaExt ? '_convertido' : '') + '.' + f,
+                    mime: f === 'webm' ? 'video/webm' : 'video/mp4', msg:'Convertendo o vídeo...'
+                };
+            }
+
+            if (id === 'compress-video') {
+                if (!mediaInfo.duration) throw new Error('Não consegui ler a duração deste vídeo, e sem ela não dá para calcular a taxa de bits. Converta para MP4 primeiro e tente de novo.');
+                const kbps = estimateBitrateKbps();
+                const out = 'saida.mp4';
+                return {
+                    args: ['-i', inName, '-c:v', 'libx264', '-preset', 'ultrafast',
+                        '-b:v', kbps + 'k', '-maxrate', Math.round(kbps * 1.2) + 'k', '-bufsize', Math.round(kbps * 2) + 'k',
+                        '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', out],
+                    out, filename: baseName + '_' + state.targetMB + 'MB.mp4', mime:'video/mp4',
+                    msg: 'Comprimindo a ' + kbps + ' kbps para caber em ' + state.targetMB + ' MB...',
+                    nota: 'O alvo é calculado pela taxa de bits, então o resultado costuma ficar perto do limite, mas pode variar um pouco para mais ou para menos.'
+                };
+            }
+
+            if (id === 'trim') {
+                const ini = Math.min(state.trimStart, state.trimEnd);
+                const fim = Math.max(state.trimStart, state.trimEnd);
+                const dur = fim - ini;
+                if (dur < 0.2) throw new Error('O trecho selecionado é muito curto. Ajuste o início e o fim.');
+                const ext = (selectedFile.name.match(/\.[^.]+$/) || ['.mp4'])[0];
+                const out = 'saida' + ext;
+                const args = state.trimPrecise
+                    ? ['-i', inName, '-ss', toFFTime(ini), '-t', toFFTime(dur), '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-c:a', 'aac', '-y', out]
+                    : ['-ss', toFFTime(ini), '-i', inName, '-t', toFFTime(dur), '-c', 'copy', '-y', out];
+                return { args, out, filename: baseName + '_trecho' + ext, mime: selectedFile.type || 'video/mp4', msg:'Cortando o trecho...' };
+            }
+
+            if (id === 'extract-audio' || id === 'convert-audio') {
+                const f = state.audioFormat;
+                const out = 'saida.' + f;
+                const args = ['-i', inName, '-vn'];
+                if (f === 'mp3') args.push('-c:a', 'libmp3lame', '-b:a', state.audioBitrate);
+                else if (f === 'wav') args.push('-c:a', 'pcm_s16le');
+                else if (f === 'm4a') args.push('-c:a', 'aac', '-b:a', state.audioBitrate);
+                else if (f === 'ogg') args.push('-c:a', 'libvorbis', '-b:a', state.audioBitrate);
+                args.push('-y', out);
+                const mimes = { mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg' };
+                return { args, out, filename: baseName + '.' + f, mime: mimes[f] || 'audio/mpeg', msg:'Processando o áudio...' };
+            }
+
+            if (id === 'mute') {
+                const ext = (selectedFile.name.match(/\.[^.]+$/) || ['.mp4'])[0];
+                const out = 'saida' + ext;
+                return { args:['-i', inName, '-c', 'copy', '-an', '-y', out], out, filename: baseName + '_sem_audio' + ext, mime: selectedFile.type || 'video/mp4', msg:'Removendo a trilha de áudio...' };
+            }
+
+            if (id === 'to-gif') {
+                const out = 'saida.gif';
+                const fps = Number(state.gifFps) || 12;
+                const w = Number(state.gifWidth) || 480;
+                // Gera a paleta no mesmo passo: sem isso o GIF fica com cores sujas.
+                const filtro = 'fps=' + fps + ',scale=' + w + ':-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse';
+                return {
+                    args:['-ss', toFFTime(state.gifStart), '-t', String(state.gifDur), '-i', inName, '-filter_complex', filtro, '-loop', '0', '-y', out],
+                    out, filename: baseName + '.gif', mime:'image/gif', msg:'Gerando o GIF...'
+                };
+            }
+
+            if (id === 'resize-video') {
+                const h = Number(state.resizeMode) || 720;
+                const out = 'saida.mp4';
+                // Aqui os argumentos vão direto para o FFmpeg, sem passar por um
+                // shell. Então nada de aspas, e vírgula dentro de uma expressão
+                // separaria filtros. A decisão de não ampliar é tomada no
+                // JavaScript, com a altura que já lemos do arquivo.
+                const jaEhMenor = mediaInfo.height > 0 && mediaInfo.height <= h;
+                const partes = [];
+                if (state.vertical) partes.push('crop=2*floor(ih*9/32):ih');
+                if (!jaEhMenor || state.vertical) partes.push('scale=-2:' + h);
+                const args = ['-i', inName];
+                if (partes.length) args.push('-vf', partes.join(','));
+                args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-c:a', 'aac', '-b:a', '128k', '-y', out);
+                return {
+                    args, out,
+                    filename: baseName + '_' + (jaEhMenor && !state.vertical ? 'recodificado' : h + 'p') + (state.vertical ? '_vertical' : '') + '.mp4',
+                    mime:'video/mp4',
+                    msg: jaEhMenor && !state.vertical ? 'O vídeo já é menor que ' + h + 'p; apenas recodificando...' : 'Redimensionando...'
+                };
+            }
+
+            throw new Error('Ferramenta desconhecida.');
+        }
+
+        function finishWith(blob, filename, nota) {
+            lastBlob = blob; lastName = filename;
+            const area = document.getElementById('ws-result-area');
+            area.classList.remove('hidden');
+            const antes = selectedFile.size, depois = blob.size;
+            const diff = antes > 0 ? Math.round(((antes - depois) / antes) * 100) : 0;
+            document.getElementById('ws-stats-line').textContent =
+                filename + ' • ' + mb(antes) + ' MB ➔ ' + mb(depois) + ' MB' + (diff > 0 ? ' (−' + diff + '%)' : (diff < 0 ? ' (+' + Math.abs(diff) + '%)' : ''));
+
+            const prev = document.getElementById('ws-result-preview');
+            prev.innerHTML = '';
+            if (blob.type.indexOf('video') === 0) {
+                const v = document.createElement('video');
+                v.src = URL.createObjectURL(blob); v.controls = true;
+                v.className = 'w-full max-h-[40vh] rounded-xl bg-black';
+                prev.appendChild(v);
+            } else if (blob.type.indexOf('audio') === 0) {
+                const a = document.createElement('audio');
+                a.src = URL.createObjectURL(blob); a.controls = true; a.className = 'w-full';
+                prev.appendChild(a);
+            } else if (blob.type === 'image/gif') {
+                const i = document.createElement('img');
+                i.src = URL.createObjectURL(blob);
+                i.className = 'max-w-full max-h-[40vh] rounded-xl border';
+                prev.appendChild(i);
+            }
+            if (nota) {
+                const p = document.createElement('p');
+                p.className = 'text-[11px] theme-muted mt-3 text-center';
+                p.textContent = nota;
+                prev.appendChild(p);
+            }
+            reDownloadLast();
+            area.scrollIntoView({ behavior:'smooth' });
+        }
+
+        function reDownloadLast() {
+            if (!lastBlob) return;
+            const url = URL.createObjectURL(lastBlob);
+            const a = document.createElement('a');
+            a.href = url; a.download = lastName;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 8000);
+        }
+
+        /* ==================== DIAGNÓSTICO ==================== */
+        function toggleDiagModal() {
+            const m = document.getElementById('diag-modal');
+            m.classList.toggle('hidden');
+            if (m.classList.contains('hidden')) return;
+            const FFmpegNS = window.FFmpegWASM || window.FFmpeg;
+            const UtilNS = window.FFmpegUtil || window.FFmpegUtils;
+            const checks = [
+                { name:'Tailwind (estilos)', ok:!!window.tailwind, req:true },
+                { name:'Lucide (ícones)', ok:!!window.lucide, req:true },
+                { name:'JSZip', ok:!!window.JSZip, req:false },
+                { name:'FFmpeg (biblioteca)', ok:!!(FFmpegNS && FFmpegNS.FFmpeg), req:true },
+                { name:'FFmpeg (utilitários)', ok:!!(UtilNS && UtilNS.toBlobURL), req:true },
+                { name:'Núcleo do FFmpeg baixado', ok:ffmpegLoaded, req:false },
+                { name:'WebAssembly no navegador', ok:(typeof WebAssembly === 'object'), req:true },
+                { name:'Modo offline (Service Worker)', ok:!!(navigator.serviceWorker && navigator.serviceWorker.controller), req:false }
+            ];
+            document.getElementById('diag-list').innerHTML = checks.map(c => {
+                const label = c.ok ? '✓ OK' : (c.req ? '✕ FALHOU' : 'carrega ao usar');
+                const cls = c.ok ? 'bg-emerald-500/15 text-emerald-600' : (c.req ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600');
+                return '<div class="flex items-center justify-between p-2.5 rounded-xl theme-subtle border gap-2"><span class="font-bold">' + escapeHtml(c.name) + '</span><span class="px-2.5 py-0.5 rounded-full font-extrabold shrink-0 ' + cls + '">' + label + '</span></div>';
+            }).join('');
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') document.getElementById('diag-modal').classList.add('hidden');
+        });
+
+        /* ==================== AÇÕES EXPOSTAS ==================== */
+        const VJ = {
+            set: (k, v, redraw) => {
+                state[k] = v;
+                if (k === 'audioFormat' || k === 'targetMB' || redraw) renderSidebar();
+            },
+            setTrim: (k, v) => {
+                state[k] = Number(v);
+                if (state.trimEnd < state.trimStart) {
+                    if (k === 'trimStart') state.trimEnd = state.trimStart;
+                    else state.trimStart = state.trimEnd;
+                }
+                const el = document.getElementById(k === 'trimStart' ? 'lbl-ts' : 'lbl-te');
+                if (el) el.textContent = formatTime(state[k]);
+                const d = document.getElementById('lbl-trimdur');
+                if (d) d.textContent = formatTime(Math.max(0, state.trimEnd - state.trimStart));
+            },
+            setGif: (k, v) => {
+                state[k] = Number(v);
+                const el = document.getElementById(k === 'gifStart' ? 'lbl-gs' : 'lbl-gd');
+                if (el) el.textContent = k === 'gifStart' ? formatTime(state.gifStart) : state.gifDur + 's';
+            },
+            useCurrentTime: (campo) => {
+                const media = document.getElementById('preview-media');
+                if (!media) return;
+                state[campo] = Math.max(0, Math.round(media.currentTime));
+                renderSidebar();
+            }
+        };
+
+        Object.assign(window, {
+            VJ, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect,
+            handleInitialDrop, executeActiveTool, setTheme, toggleDiagModal, reDownloadLast
+        });
+    })();
+    </script>
+</body>
+</html>

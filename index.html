@@ -1,0 +1,2541 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VJ Converter 4.2 — 26 ferramentas de PDF processadas no seu próprio navegador. Juntar, dividir, comprimir, converter para Word/Excel e tarja preta irreversível.">
+    <meta name="theme-color" content="#e5322d">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>VJ Converter 4.2 — Estúdio Seguro de PDF</title>
+
+    <!--
+      BIBLIOTECAS EXTERNAS — TODAS COM VERSÃO TRAVADA.
+      Depois de publicar, rode ./gerar-sri.sh para preencher os atributos integrity="..."
+      (o script imprime as linhas prontas para colar). Sem versão travada, uma atualização
+      do CDN pode quebrar o site sem você ter tocado em nada.
+    -->
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root[data-theme="light"] { --bg-main:#f4f5f8; --bg-surface:#ffffff; --bg-subtle:#eef0f5; --text-main:#1e293b; --text-muted:#64748b; --border-color:#e2e8f0; --accent:#e5322d; }
+        :root[data-theme="dark"] { --bg-main:#0b0f19; --bg-surface:#151c2c; --bg-subtle:#1e293b; --text-main:#f1f5f9; --text-muted:#94a3b8; --border-color:#263147; --accent:#ef4444; }
+        :root[data-theme="sepia"] { --bg-main:#f4ecd8; --bg-surface:#fdf6e3; --bg-subtle:#eee8d5; --text-main:#3c3024; --text-muted:#705e4a; --border-color:#dfd5be; --accent:#b84128; }
+        body { font-family:'Inter',sans-serif; background-color:var(--bg-main); color:var(--text-main); }
+        .theme-surface { background-color:var(--bg-surface); border-color:var(--border-color); color:var(--text-main); }
+        .theme-subtle { background-color:var(--bg-subtle); border-color:var(--border-color); color:var(--text-main); }
+        .theme-muted { color:var(--text-muted); }
+        .theme-input { background-color:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-main); }
+        .tool-card { background-color:var(--bg-surface); border:1px solid var(--border-color); transition:all 0.2s ease; }
+        .tool-card:hover { transform:translateY(-4px); box-shadow:0 12px 24px -6px rgba(0,0,0,0.12); border-color:var(--accent); }
+        .category-pill { background-color:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-main); }
+        .category-pill.active, .theme-btn.active { background-color:var(--accent); border-color:var(--accent); color:#fff; }
+        .option-card { border:2px solid var(--border-color); cursor:pointer; transition:all 0.15s ease; }
+        .option-card.selected { border-color:#e5322d; background-color:rgba(229,50,45,0.06); }
+        .option-card-purple.selected { border-color:#7c3aed; background-color:rgba(124,58,237,0.07); }
+        .sortable-ghost { opacity:0.35; border:2px dashed #e5322d !important; }
+        /* Permite desenhar com o dedo no celular sem a página rolar junto */
+        .draw-surface { touch-action:none; -webkit-user-select:none; user-select:none; }
+        button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- TOP NAVBAR -->
+    <header class="theme-surface border-b sticky top-0 z-40 shadow-sm h-14 flex items-center px-4 sm:px-6 justify-between">
+        <div class="flex items-center space-x-5">
+            <button type="button" onclick="showHome()" class="flex items-center space-x-2 focus:outline-none">
+                <div class="w-9 h-9 rounded-lg bg-[#e5322d] flex items-center justify-center text-white font-extrabold text-lg shadow">VJ</div>
+                <div class="text-left">
+                    <span class="font-extrabold text-lg sm:text-xl tracking-tight block leading-none">VJ<span class="text-[#e5322d]">Converter</span></span>
+                    <span class="text-[9px] font-bold uppercase tracking-widest text-emerald-600">🔒 Processa no seu aparelho</span>
+                </div>
+            </button>
+            <nav class="hidden xl:flex items-center space-x-4 text-xs font-bold tracking-wider uppercase">
+                <button type="button" onclick="openTool('workflow')" class="text-[#e5322d] hover:underline">⚡ Fluxo 1-Clique</button>
+                <button type="button" onclick="openTool('merge')" class="hover:text-[#e5322d]">Juntar PDF</button>
+                <button type="button" onclick="openTool('split')" class="hover:text-[#e5322d]">Dividir PDF</button>
+                <button type="button" onclick="openTool('compress')" class="hover:text-[#e5322d]">Comprimir</button>
+                <button type="button" onclick="openTool('pdf-to-word')" class="hover:text-[#e5322d]">PDF ➔ Word (.docx)</button>
+                <button type="button" onclick="openTool('redact')" class="hover:text-[#e5322d]">Ocultar/Tarjar</button>
+                <button type="button" onclick="showHome()" class="hover:text-[#e5322d]">Todas (26)</button>
+            </nav>
+        </div>
+
+        <div class="flex items-center space-x-1.5 sm:space-x-2">
+            <a href="img.html" class="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#4d90fe] hover:bg-[#357ae8] text-white shadow-sm flex items-center gap-1.5 transition">
+                <span>🖼️ VJ IMG</span>
+            </a>
+            <a href="midia.html" class="hidden sm:flex text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#7c3aed] hover:bg-[#6d28d9] text-white shadow-sm items-center gap-1.5 transition" title="Vídeo e áudio">
+                <span>🎬 VJ Mídia</span>
+            </a>
+            <div class="flex items-center rounded-xl p-0.5 theme-subtle border text-xs">
+                <button type="button" onclick="setTheme('light')" id="theme-btn-light" class="theme-btn px-2 py-1 rounded-lg font-bold" title="Modo Claro" aria-label="Tema claro">☀️</button>
+                <button type="button" onclick="setTheme('sepia')" id="theme-btn-sepia" class="theme-btn px-2 py-1 rounded-lg font-bold" title="Modo Sépia" aria-label="Tema sépia">📜</button>
+                <button type="button" onclick="setTheme('dark')" id="theme-btn-dark" class="theme-btn px-2 py-1 rounded-lg font-bold" title="Modo Escuro" aria-label="Tema escuro">🌙</button>
+            </div>
+            <button type="button" onclick="togglePrivacyModal()" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg theme-surface border text-emerald-600" title="Segurança e Privacidade LGPD">🛡️ LGPD</button>
+            <button type="button" onclick="toggleDiagModal()" class="hidden sm:inline-block text-xs font-semibold px-2.5 py-1.5 rounded-lg theme-surface border">🩺 Motores</button>
+            <button type="button" onclick="toggleSettingsModal()" class="text-xs font-semibold px-2.5 py-1.5 rounded-lg theme-surface border">🔑 Chave IA</button>
+            <button type="button" onclick="toggleHistoryModal()" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#e5322d] text-white">Histórico</button>
+        </div>
+    </header>
+
+    <!-- HOME CATALOG VIEW -->
+    <main id="home-view" class="flex-grow">
+        <section class="py-8 px-4 text-center max-w-4xl mx-auto">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 mb-3 border border-emerald-500/20 cursor-pointer" onclick="togglePrivacyModal()">
+                🛡️ 24 das 26 ferramentas processam tudo dentro do seu aparelho. Veja quais são as 2 exceções.
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2">Ferramentas online para os amantes de PDF</h1>
+            <p class="text-sm sm:text-base theme-muted max-w-2xl mx-auto">
+                Arraste e solte miniaturas com o dedo ou com o mouse, lupa de zoom em tempo real, exportação nativa <code>.docx</code> OpenXML, tarja preta irreversível e Fluxos de Trabalho em 1 clique.
+            </p>
+            <div class="mt-6 flex flex-wrap items-center justify-center gap-2">
+                <button type="button" onclick="filterCategory('all')" data-cat="all" class="category-pill active px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Todas (26)</button>
+                <button type="button" onclick="filterCategory('workflow')" data-cat="workflow" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">⚡ Fluxos de Trabalho</button>
+                <button type="button" onclick="filterCategory('pro')" data-cat="pro" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">🏆 Exclusivas VJ Pro</button>
+                <button type="button" onclick="filterCategory('organizar')" data-cat="organizar" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Organizar PDF</button>
+                <button type="button" onclick="filterCategory('otimizar')" data-cat="otimizar" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Otimizar PDF</button>
+                <button type="button" onclick="filterCategory('converter')" data-cat="converter" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Converter PDF</button>
+                <button type="button" onclick="filterCategory('editar')" data-cat="editar" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Editar & Segurança</button>
+                <button type="button" onclick="filterCategory('ia')" data-cat="ia" class="category-pill px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-semibold">✨ PDF Intelligence</button>
+            </div>
+        </section>
+
+        <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-14">
+            <div id="tools-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></div>
+        </section>
+    </main>
+
+    <!-- STUDIO WORKSPACE VIEW -->
+    <section id="workspace-view" class="hidden flex-grow flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+        <!-- STEP 1: INITIAL UPLOAD -->
+        <div id="ws-initial-upload" class="flex-grow flex flex-col items-center justify-center p-6 text-center" ondragover="event.preventDefault()" ondrop="handleInitialDrop(event)">
+            <div id="ws-icon-box" class="w-16 h-16 rounded-2xl mb-4 flex items-center justify-center text-white shadow-lg"></div>
+            <h2 id="ws-title" class="text-3xl font-extrabold mb-2"></h2>
+            <p id="ws-desc" class="theme-muted max-w-xl mb-4 text-sm sm:text-base"></p>
+            <div id="ws-cloud-warning" class="hidden max-w-xl mb-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-700 text-xs text-left leading-relaxed"></div>
+            <input type="file" id="ws-file-input" class="hidden" onchange="handleFileSelect(event)">
+            <button type="button" onclick="triggerFileInput()" class="bg-[#e5322d] hover:bg-[#c92520] text-white font-extrabold text-xl px-12 py-5 rounded-2xl shadow-xl transition transform hover:scale-105 mb-3">
+                Selecionar arquivo(s)
+            </button>
+            <p class="text-xs theme-muted">ou arraste e solte os ficheiros aqui (até 50 arquivos por vez)</p>
+            <button type="button" onclick="showHome()" class="mt-8 text-xs font-semibold theme-muted hover:underline">← Voltar à página inicial</button>
+        </div>
+
+        <!-- STEP 2: SPLIT-SCREEN STUDIO -->
+        <div id="ws-studio-layout" class="hidden flex-grow flex flex-col lg:flex-row h-full overflow-hidden relative">
+            <!-- LEFT CANVAS -->
+            <div class="flex-grow h-full overflow-y-auto p-6 relative select-none" id="studio-left-canvas" ondragover="event.preventDefault()" ondrop="handleInitialDrop(event)">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="showHome()" class="text-xs font-bold px-3 py-1.5 rounded-lg theme-surface border shadow-sm hover:border-[#e5322d]">← Todas as Ferramentas</button>
+                        <span class="text-[11px] px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 font-bold">✋ Arraste para ordenar • 🔍 Toque na lupa para ampliar</span>
+                    </div>
+                    <span id="studio-file-summary" class="text-xs font-semibold theme-muted"></span>
+                </div>
+
+                <!-- Floating "+ Adicionar mais ficheiros" -->
+                <div class="fixed lg:absolute top-16 right-6 lg:right-8 z-20 flex items-center gap-2 group">
+                    <span class="hidden group-hover:inline-block bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow">Adicionar mais ficheiros</span>
+                    <button type="button" onclick="triggerFileInput()" class="relative w-12 h-12 rounded-full bg-[#e5322d] hover:bg-[#c92520] text-white shadow-xl flex items-center justify-center text-2xl font-bold" aria-label="Adicionar mais arquivos">
+                        +
+                        <span id="floating-file-badge" class="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-extrabold flex items-center justify-center border-2 border-white">1</span>
+                    </button>
+                </div>
+
+                <!-- Visual Stage -->
+                <div id="studio-visual-stage" class="min-h-[320px] flex flex-wrap items-start justify-center gap-6 pt-4 pb-10"></div>
+
+                <!-- Post-Processing Banner & Chaining -->
+                <div id="ws-success-banner" class="hidden max-w-4xl mx-auto mt-2 mb-8 theme-surface border-2 border-emerald-500 rounded-2xl p-5 shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-3 mb-3" style="border-color:var(--border-color);">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold text-lg">✓</div>
+                            <div>
+                                <h4 class="font-extrabold text-base text-emerald-600">Arquivo Processado com Sucesso!</h4>
+                                <p id="ws-stats-line" class="text-xs theme-muted font-semibold"></p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="reDownloadLastBlob()" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow">⬇ Baixar Novamente</button>
+                    </div>
+                    <div id="ws-chain-actions" class="hidden">
+                        <p class="text-xs font-bold mb-2">🔗 Continuar com este PDF em outra ferramenta (1 Clique):</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" onclick="chainToTool('pagenumbers')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]"># Numerar</button>
+                            <button type="button" onclick="chainToTool('watermark')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]">💮 Marca d'Água</button>
+                            <button type="button" onclick="chainToTool('normalize-a4')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]">📐 Padronizar A4</button>
+                            <button type="button" onclick="chainToTool('compress')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]">📉 Comprimir</button>
+                            <button type="button" onclick="chainToTool('split')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]">✂️ Dividir</button>
+                            <button type="button" onclick="chainToTool('redact')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]">⬛ Tarjar</button>
+                            <button type="button" onclick="chainToTool('pdf-to-word')" class="px-3 py-1.5 rounded-lg text-xs font-bold theme-subtle border hover:border-[#e5322d]">📝 Word (.docx)</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Result Area -->
+                <div id="ws-result-area" class="hidden max-w-4xl mx-auto mt-4 mb-12 theme-surface border rounded-2xl p-6 shadow-xl">
+                    <div class="flex items-center justify-between border-b pb-3 mb-4" style="border-color:var(--border-color);">
+                        <h3 class="font-bold text-emerald-600">✓ Resultado Pronto!</h3>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="copyResultText()" class="text-xs font-semibold px-3 py-1.5 rounded-lg theme-subtle border">Copiar Texto</button>
+                            <button type="button" onclick="downloadTextOutput()" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#e5322d] text-white">Baixar Arquivo</button>
+                        </div>
+                    </div>
+                    <div id="ws-result-content" class="text-sm whitespace-pre-wrap theme-subtle p-4 rounded-xl border max-h-96 overflow-y-auto font-mono"></div>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDEBAR -->
+            <aside class="w-full lg:w-[390px] shrink-0 theme-surface border-t lg:border-t-0 lg:border-l flex flex-col justify-between h-auto lg:h-full z-30 shadow-xl">
+                <div class="overflow-y-auto flex-grow">
+                    <div class="p-4 border-b text-center" style="border-color:var(--border-color);">
+                        <h3 id="sidebar-tool-title" class="text-lg font-extrabold"></h3>
+                    </div>
+                    <div id="sidebar-dynamic-controls" class="p-5 space-y-4 text-sm"></div>
+                </div>
+                <div class="p-5 border-t theme-surface" style="border-color:var(--border-color);">
+                    <button type="button" id="ws-execute-btn" onclick="executeActiveTool()" class="w-full bg-[#e5322d] hover:bg-[#c92520] text-white font-extrabold text-lg py-4 px-6 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                        <span id="ws-execute-label">Processar PDF</span> <span>➔</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- AI Summary Modal -->
+            <div id="ai-summary-modal" class="hidden absolute inset-0 bg-black/50 backdrop-blur-[2px] z-40 flex items-center justify-center p-4">
+                <div class="theme-surface rounded-2xl max-w-lg w-full p-7 shadow-2xl border">
+                    <h3 class="text-center font-bold text-lg mb-6">Definições do Resumo</h3>
+                    <div class="mb-6">
+                        <p class="text-center font-bold text-sm mb-4">Comprimento</p>
+                        <input type="range" id="summary-length-slider" min="1" max="3" step="1" value="2" class="w-full accent-violet-600 cursor-pointer">
+                        <div class="flex justify-between text-xs theme-muted mt-2 font-medium"><span>Curto</span><span>Médio</span><span>Longo</span></div>
+                    </div>
+                    <div class="mb-5">
+                        <p class="text-center font-bold text-sm mb-3">Modo de processamento</p>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div onclick="selectSummaryMode('local')" id="sum-mode-local" class="option-card option-card-purple selected rounded-xl p-3.5"><span class="font-bold text-sm block">🔒 Local (offline)</span><span class="text-[11px] theme-muted">Resumo extrativo feito no seu aparelho. Nada sai daqui.</span></div>
+                            <div onclick="selectSummaryMode('cloud')" id="sum-mode-cloud" class="option-card option-card-purple rounded-xl p-3.5"><span class="font-bold text-sm block">☁️ Google Gemini</span><span class="text-[11px] theme-muted">Melhor qualidade. <strong>Envia o texto do PDF ao Google.</strong></span></div>
+                        </div>
+                    </div>
+                    <div id="sum-cloud-warn" class="hidden mb-5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-700 text-[11px] leading-relaxed"></div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" onclick="document.getElementById('ai-summary-modal').classList.add('hidden')" class="px-4 py-2.5 rounded-xl text-sm font-bold theme-subtle border">Cancelar</button>
+                        <button type="button" onclick="closeAiSummaryModalAndRun()" class="bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl shadow">Continuar ➔</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Overlay -->
+            <div id="ws-progress-area" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="theme-surface rounded-2xl max-w-md w-full p-6 text-center shadow-2xl border">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-[#e5322d] mb-3"></div>
+                    <p id="ws-progress-text" class="font-extrabold text-base">Processando...</p>
+                    <div class="w-full bg-slate-200 rounded-full h-2.5 mt-4 overflow-hidden">
+                        <div id="ws-progress-bar" class="bg-[#e5322d] h-2.5 rounded-full transition-all duration-200" style="width:15%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- LUPA DE ZOOM MODAL -->
+    <div id="zoom-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="closeZoomModal()">
+        <div class="theme-surface rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border overflow-hidden" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between px-5 py-3 border-b" style="border-color:var(--border-color);">
+                <h3 id="zoom-modal-title" class="font-extrabold text-sm">🔍 Lupa de Alta Resolução</h3>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="changeZoomPage(-1)" class="px-3 py-1 rounded-lg theme-subtle border text-xs font-bold">◀ Anterior</button>
+                    <button type="button" onclick="changeZoomPage(1)" class="px-3 py-1 rounded-lg theme-subtle border text-xs font-bold">Próxima ▶</button>
+                    <button type="button" onclick="closeZoomModal()" class="w-8 h-8 rounded-lg bg-red-500 text-white font-bold text-xs">✕</button>
+                </div>
+            </div>
+            <div class="flex-grow overflow-auto p-6 flex justify-center bg-slate-900/40">
+                <canvas id="zoom-modal-canvas" class="rounded shadow-2xl bg-white max-w-full h-auto"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRIVACY & LGPD MODAL -->
+    <div id="privacy-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-xl w-full p-6 shadow-2xl border max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b pb-3 mb-4" style="border-color:var(--border-color);">
+                <h3 class="font-extrabold text-emerald-600">🛡️ Como seus arquivos são tratados</h3>
+                <button type="button" onclick="togglePrivacyModal()" aria-label="Fechar">✕</button>
+            </div>
+            <div class="space-y-3 text-xs leading-relaxed">
+                <p><strong>1. Processamento no seu aparelho:</strong> em 24 das 26 ferramentas, os arquivos são abertos e processados na memória do seu próprio navegador. Eles não são enviados para nenhum servidor — nem para o nosso, que não existe: o site é apenas uma página estática.</p>
+                <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-800">
+                    <p class="font-bold mb-1">2. ⚠️ As duas exceções, com todas as letras:</p>
+                    <p class="mb-1"><strong>Traduzir PDF</strong> envia o texto das páginas para o serviço de tradução do Google. Não há como traduzir sem isso.</p>
+                    <p><strong>Resumir com IA</strong> tem dois modos: o modo <strong>Local</strong> é feito aqui dentro e não envia nada; o modo <strong>Google Gemini</strong> envia o texto do documento para o Google. Você escolhe a cada uso, e o site avisa antes de enviar.</p>
+                    <p class="mt-1.5">Não use essas duas com peças sigilosas, dados de menores ou qualquer documento sob segredo de justiça.</p>
+                </div>
+                <p><strong>3. Internet:</strong> as ferramentas comuns funcionam offline depois que a página carregou. Já o <strong>OCR/ROC</strong> precisa baixar o pacote de idioma português na primeira vez que é usado — o seu documento continua sendo lido só aqui, mas o download do dicionário exige conexão.</p>
+                <p><strong>4. Tarja Preta Irreversível:</strong> a ferramenta <em>Ocultar PDF</em> transforma a página tarjada em imagem e limpa os metadados, de modo que o texto que estava sob a tarja deixa de existir no arquivo final.</p>
+                <p><strong>5. Isolamento por usuário:</strong> o histórico e sua chave opcional de IA ficam gravados apenas no <code>localStorage</code> do seu próprio dispositivo. Nenhum aluno enxerga os dados de outro.</p>
+                <p class="theme-muted"><strong>6. Transparência:</strong> o código roda aberto no navegador. Você pode conferir tudo isso com F12 ➔ aba Rede: nas 24 ferramentas locais, nenhuma requisição sai enquanto o arquivo é processado.</p>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button type="button" onclick="togglePrivacyModal()" class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 text-white">Entendi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONSENTIMENTO DE ENVIO PARA A NUVEM -->
+    <div id="cloud-consent-modal" class="hidden fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-amber-500">
+            <h3 class="font-extrabold text-amber-600 text-base mb-3">⚠️ Esta ação envia o texto do documento para fora</h3>
+            <div id="cloud-consent-text" class="text-xs leading-relaxed space-y-2 mb-4"></div>
+            <label class="flex items-start gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer text-xs">
+                <input type="checkbox" id="cloud-consent-check" class="mt-0.5 accent-amber-600">
+                <span>Confirmo que este documento <strong>não é sigiloso</strong> e autorizo o envio do texto.</span>
+            </label>
+            <div class="flex justify-end gap-2 mt-5">
+                <button type="button" onclick="resolveCloudConsent(false)" class="px-4 py-2 rounded-xl text-xs font-bold theme-subtle border">Cancelar</button>
+                <button type="button" onclick="resolveCloudConsent(true)" class="px-5 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white">Enviar mesmo assim</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DIAGNOSTICS MODAL -->
+    <div id="diag-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-lg w-full p-6 shadow-2xl border">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-extrabold">🩺 Diagnóstico & Autoteste dos Motores</h3>
+                <button type="button" onclick="toggleDiagModal()" aria-label="Fechar">✕</button>
+            </div>
+            <div id="diag-list" class="space-y-2 text-xs max-h-80 overflow-y-auto"></div>
+            <div class="mt-5 flex justify-end"><button type="button" onclick="toggleDiagModal()" class="px-5 py-2 rounded-xl text-xs font-bold bg-[#e5322d] text-white">Fechar</button></div>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL (BYOK) -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-md w-full p-6 shadow-2xl border">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-extrabold">🔑 Chave Pessoal de IA (Google Gemini)</h3>
+                <button type="button" onclick="toggleSettingsModal()" aria-label="Fechar">✕</button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div class="p-3 rounded-xl theme-subtle border leading-relaxed">
+                    <strong>Modelo BYOK:</strong> sua chave fica salva <strong>apenas neste navegador</strong> e nunca é vista por outros usuários do site. Ela só é usada se você escolher o modo Google Gemini no Resumo.
+                </div>
+                <div>
+                    <label class="block font-bold mb-1" for="gemini-api-key-input">Sua API Key do Google AI Studio:</label>
+                    <input type="password" id="gemini-api-key-input" placeholder="AIzaSy..." class="w-full rounded-xl theme-input px-3.5 py-2 text-sm">
+                    <p class="text-[11px] theme-muted mt-1.5">Para gerar uma chave gratuita, acesse <strong>aistudio.google.com</strong> e clique em <em>Get API Key</em>.</p>
+                </div>
+            </div>
+            <div class="flex justify-between items-center mt-6 pt-3 border-t" style="border-color:var(--border-color);">
+                <button type="button" onclick="clearSavedApiKey()" class="text-xs font-bold text-red-500 hover:underline">Apagar Chave deste PC</button>
+                <div class="flex gap-2">
+                    <button type="button" onclick="toggleSettingsModal()" class="px-4 py-2 rounded-xl text-xs font-bold theme-subtle">Cancelar</button>
+                    <button type="button" onclick="saveSettings()" class="px-5 py-2 rounded-xl text-xs font-bold bg-[#e5322d] text-white">Salvar no Meu Navegador</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HISTORY MODAL -->
+    <div id="history-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-md w-full p-6 shadow-2xl border">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-extrabold">Histórico Local deste Dispositivo</h3>
+                <button type="button" onclick="toggleHistoryModal()" aria-label="Fechar">✕</button>
+            </div>
+            <div id="history-list" class="space-y-2 max-h-72 overflow-y-auto text-xs"></div>
+            <div class="mt-4 flex justify-between pt-3 border-t">
+                <button type="button" onclick="clearHistory()" class="text-xs text-red-500 font-bold">Limpar Histórico</button>
+                <button type="button" onclick="toggleHistoryModal()" class="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#e5322d] text-white">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="theme-surface border-t py-4 px-4 text-center text-xs theme-muted">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p>© 2026 <strong>VJ Converter 4.2</strong> — 24 de 26 ferramentas processam tudo no seu próprio aparelho.</p>
+            <button type="button" onclick="togglePrivacyModal()" class="text-emerald-600 font-bold hover:underline">🛡️ Termo de Segurança & LGPD</button>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        /* ====================================================================
+           0. REDE DE SEGURANÇA DAS BIBLIOTECAS
+           Se uma versão travada sumir do CDN, cai para a versão mais recente
+           em vez de deixar o site quebrado e silencioso.
+        ==================================================================== */
+        const CDN_FALLBACKS = [
+            { check: () => window.tailwind, url: 'https://cdn.tailwindcss.com' },
+            { check: () => window.lucide, url: 'https://unpkg.com/lucide@latest' },
+            { check: () => window.Tesseract, url: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js' }
+        ];
+        function loadFallbacks() {
+            CDN_FALLBACKS.forEach(f => {
+                if (f.check()) return;
+                const s = document.createElement('script');
+                s.src = f.url;
+                s.onload = () => { if (window.lucide) refreshIcons(); };
+                document.head.appendChild(s);
+            });
+        }
+
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        const NL = String.fromCharCode(10);
+        const MAX_FILES = 50;
+
+        /* ====================================================================
+           1. SANEAMENTO DE TEXTO PARA AS FONTES PADRÃO DO PDF
+           As fontes Helvetica/Times embutidas no pdf-lib só aceitam o conjunto
+           WinAnsi (Latin-1). Um emoji, uma seta "→" ou um traço longo no nome
+           de um anexo fazia o pdf-lib lançar exceção e o usuário via só "Erro:".
+        ==================================================================== */
+        function toWinAnsi(input) {
+            let s = String(input == null ? '' : input);
+            try { s = s.normalize('NFC'); } catch (e) { /* navegador antigo */ }
+            s = s
+                .replace(/[‘’‚‛′]/g, "'")
+                .replace(/[“”„″]/g, '"')
+                .replace(/[‐‑‒–—―−]/g, '-')
+                .replace(/…/g, '...')
+                .replace(/[→➡➔]/g, '->')
+                .replace(/[←⬅]/g, '<-')
+                .replace(/[•●▪]/g, '-')
+                .replace(/€/g, 'EUR')
+                .replace(/™/g, '(TM)')
+                .replace(/ /g, ' ')
+                .replace(/✓|✔/g, 'OK')
+                .replace(/\s+/g, ' ');
+            // Remove tudo que a fonte não consegue desenhar (emojis, CJK, símbolos).
+            s = s.replace(/[^\x20-\x7E¡-ÿ]/g, '');
+            return s.trim();
+        }
+
+        /* ====================================================================
+           2. ARRASTO UNIFICADO (MOUSE + DEDO)
+           Pointer Events cobrem mouse, dedo e caneta com um só código.
+        ==================================================================== */
+        function attachDrag(el, handlers) {
+            el.classList.add('draw-surface');
+            const pos = (e) => {
+                const r = el.getBoundingClientRect();
+                return {
+                    x: (e.clientX - r.left) * (el.width ? el.width / r.width : 1),
+                    y: (e.clientY - r.top) * (el.height ? el.height / r.height : 1),
+                    rectX: e.clientX - r.left,
+                    rectY: e.clientY - r.top,
+                    rect: r
+                };
+            };
+            let active = false;
+            el.onpointerdown = (e) => {
+                e.preventDefault();
+                active = true;
+                try { el.setPointerCapture(e.pointerId); } catch (err) {}
+                handlers.start && handlers.start(pos(e), e);
+            };
+            el.onpointermove = (e) => {
+                if (handlers.hover) handlers.hover(pos(e), e, active);
+                if (!active) return;
+                e.preventDefault();
+                handlers.move && handlers.move(pos(e), e);
+            };
+            const finish = (e) => {
+                if (!active) return;
+                active = false;
+                try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+                handlers.end && handlers.end(pos(e), e);
+            };
+            el.onpointerup = finish;
+            el.onpointercancel = finish;
+            el.onpointerleave = (e) => { if (active && handlers.leaveEnds !== false) finish(e); };
+        }
+
+        /* ====================================================================
+           3. CATÁLOGO DE FERRAMENTAS
+           cloud:true  -> a ferramenta envia conteúdo para fora do aparelho
+           needsNet:true -> funciona localmente, mas baixa algo na 1ª vez
+        ==================================================================== */
+        const TOOLS = [
+            { id:'workflow', title:'Criar um fluxo de trabalho', desc:'Monte combos automáticos (Juntar + Padronizar A4 + Numerar + Comprimir) e execute tudo em 1 clique.', cat:'workflow', icon:'workflow', color:'bg-[#e5322d]', badge:'1-Clique!', accept:'.pdf', multiple:true, btnLabel:'Executar Fluxo Completo ⚡' },
+            { id:'merge', title:'Juntar PDF', desc:'Mescle vários PDFs arrastando a ordem e gere Sumário Clicável automático.', cat:'organizar', icon:'combine', color:'bg-[#e5322d]', accept:'.pdf', multiple:true, btnLabel:'Juntar PDF' },
+            { id:'split', title:'Dividir PDF', desc:'Divida por múltiplos intervalos visuais, páginas fixas ou limite real de Megabytes (e-Proc/PJe).', cat:'organizar', icon:'split', color:'bg-[#e5322d]', accept:'.pdf', multiple:false, btnLabel:'Dividir PDF' },
+            { id:'compress', title:'Comprimir PDF', desc:'Escolha entre Otimização Vetorial (mantém texto selecionável) ou Extrema/Recomendada.', cat:'otimizar', icon:'minimize-2', color:'bg-emerald-600', badge:'Vetorial!', accept:'.pdf', multiple:true, btnLabel:'Comprimir PDF' },
+            { id:'pdf-to-word', title:'PDF para Word (.docx)', desc:'Gera arquivo .DOCX OpenXML real com parágrafos contínuos, recuo ABNT 4cm e opção ROC (OCR).', cat:'converter', icon:'file-text', color:'bg-blue-600', badge:'.DOCX Real', accept:'.pdf', multiple:true, btnLabel:'Converter para WORD (.docx)' },
+            { id:'pdf-to-excel', title:'PDF para Excel (.xlsx)', desc:'Converte valores R$ em números somáveis no Excel, com opção Uma folha ou Várias folhas.', cat:'converter', icon:'sheet', color:'bg-green-600', badge:'Moeda R$', accept:'.pdf', multiple:true, btnLabel:'Converta para EXCEL' },
+            { id:'redact', title:'Ocultar PDF (Tarja Preta)', desc:'Tarja preta irreversível (destrói o texto sob a tarja por rasterização e limpa metadados LGPD).', cat:'editar', icon:'eye-off', color:'bg-slate-800', badge:'LGPD Seguro!', accept:'.pdf', multiple:false, btnLabel:'Aplicar Tarja Irreversível' },
+            { id:'sign', title:'Assinar / Editar PDF', desc:'Insira sua assinatura ou carimbo de protocolo diretamente nas páginas do PDF.', cat:'editar', icon:'pen-tool', color:'bg-blue-800', badge:'Canvas!', accept:'.pdf', multiple:false, btnLabel:'Assinar e Baixar PDF' },
+            { id:'crop', title:'Recortar PDF (Margens)', desc:'Remova bordas sujas de escaneamento ou ajuste as margens superior, inferior e laterais.', cat:'editar', icon:'crop', color:'bg-purple-800', accept:'.pdf', multiple:true, btnLabel:'Recortar Margens do PDF' },
+            { id:'unlock', title:'Desbloquear & Sanitizar', desc:'Remove restrições de cópia/impressão e apaga metadados ocultos (Autor, Histórico XMP).', cat:'editar', icon:'unlock', color:'bg-teal-700', accept:'.pdf', multiple:true, btnLabel:'Desbloquear & Limpar PDF' },
+            { id:'ai-summary', title:'Resumir com IA', desc:'Resumo local (offline) ou, se você escolher, resumo avançado pelo Google Gemini.', cat:'ia', icon:'sparkles', color:'bg-violet-600', badge:'Local ou Nuvem', accept:'.pdf', multiple:false, btnLabel:'Gerar Resumo', optionalCloud:true },
+            { id:'translate', title:'Traduzir PDF', desc:'Traduz escolhendo idioma de origem/destino, com opção de Manter Layout gerando novo PDF.', cat:'ia', icon:'languages', color:'bg-purple-600', badge:'☁️ Envia ao Google', accept:'.pdf', multiple:false, btnLabel:'Traduzir PDF ✨', cloud:true },
+            { id:'toc-builder', title:'Sumário & Índice Clicável', desc:'Cria páginas de Sumário Executivo com links clicáveis para cada documento, sem limite de anexos.', cat:'pro', icon:'book-open-check', color:'bg-amber-600', badge:'VJ Pro', accept:'.pdf', multiple:true, btnLabel:'Gerar Sumário Clicável' },
+            { id:'normalize-a4', title:'Padronizador Escala A4', desc:'Normaliza anexos de qualquer tamanho para caberem perfeitamente em folhas A4.', cat:'pro', icon:'maximize-2', color:'bg-teal-600', badge:'VJ Pro', accept:'.pdf', multiple:true, btnLabel:'Padronizar Escala A4' },
+            { id:'extract-media', title:'Extrator de Mídias', desc:'Extrai páginas em alta resolução compactadas em arquivo .ZIP.', cat:'pro', icon:'image-down', color:'bg-pink-600', badge:'VJ Pro', accept:'.pdf', multiple:true, btnLabel:'Extrair Mídias (.zip)' },
+            { id:'jpg-to-pdf', title:'Imagem para PDF (Super Nitidez)', desc:'Converte fotos (JPG, PNG, WEBP, HEIC) em PDF A4 com filtro que remove sombras do papel.', cat:'otimizar', icon:'scan-line', color:'bg-amber-600', badge:'Nitidez', accept:'image/*', multiple:true, btnLabel:'Converter para PDF' },
+            { id:'pdf-to-ppt', title:'PDF para PowerPoint', desc:'Transforma cada página do PDF em slides .PPTX.', cat:'converter', icon:'presentation', color:'bg-orange-600', accept:'.pdf', multiple:true, btnLabel:'Converter para PPTX' },
+            { id:'word-to-pdf', title:'Word para PDF', desc:'Converte arquivos .docx do Word em documentos PDF em lote.', cat:'converter', icon:'file-check-2', color:'bg-blue-700', accept:'.docx', multiple:true, btnLabel:'Converter para PDF' },
+            { id:'pdf-to-jpg', title:'PDF para JPG', desc:'Converte páginas do PDF em imagens JPG de alta qualidade.', cat:'converter', icon:'image', color:'bg-amber-500', accept:'.pdf', multiple:true, btnLabel:'Converter para JPG' },
+            { id:'organize', title:'Organizar PDF', desc:'Arraste páginas para mudar a ordem, gire, inspecione com a lupa ou exclua.', cat:'organizar', icon:'layout-grid', color:'bg-rose-600', accept:'.pdf', multiple:false, btnLabel:'Salvar PDF Organizado' },
+            { id:'rotate', title:'Rodar PDF', desc:'Gire documentos PDF em 90°, 180° ou 270°.', cat:'editar', icon:'rotate-cw', color:'bg-purple-700', accept:'.pdf', multiple:true, btnLabel:'Rodar PDF' },
+            { id:'watermark', title:"Marca d'água", desc:'Estampe texto diagonal personalizado em todas as páginas.', cat:'editar', icon:'stamp', color:'bg-pink-700', accept:'.pdf', multiple:true, btnLabel:"Inserir Marca d'água" },
+            { id:'pagenumbers', title:'Números de página', desc:'Adicione numeração automática de folhas no rodapé (Fls. X / Y).', cat:'editar', icon:'hash', color:'bg-indigo-600', accept:'.pdf', multiple:true, btnLabel:'Numerar PDF' },
+            { id:'ocr', title:'OCR PDF (ROC)', desc:'Reconhecimento de caracteres feito no seu aparelho. Baixa o idioma português na 1ª vez.', cat:'otimizar', icon:'scan-text', color:'bg-emerald-700', badge:'1ª vez: internet', accept:'.pdf,image/*', multiple:false, btnLabel:'Aplicar OCR', needsNet:true },
+            { id:'compare', title:'Comparar PDF', desc:'Compare 2 PDFs e destaque diferenças de texto.', cat:'editar', icon:'git-compare', color:'bg-cyan-700', accept:'.pdf', multiple:true, btnLabel:'Comparar PDFs' },
+            { id:'pdf-to-md', title:'PDF para Markdown', desc:'Converta PDFs em Markdown (.md) limpo para LLMs e Notion.', cat:'ia', icon:'file-code', color:'bg-indigo-700', accept:'.pdf', multiple:true, btnLabel:'Converter para Markdown' }
+        ];
+
+        /* ==================== ESTADO ==================== */
+        let activeTool = null, selectedFiles = [], loadedPdfDoc = null, totalPdfPages = 1;
+        let organizePagesState = [], sortableInstance = null;
+        let lastGeneratedText = '', lastGeneratedExt = 'txt', lastOutputBlob = null, lastOutputFilename = '';
+        let zoomState = { pageNum: 1 };
+        let splitState = { tab:'range', mode:'custom', intervals:[{ from:1, to:1 }], fixedStep:5, maxSizeMB:10, mergeIntervals:false };
+        let compressMode = 'vector', wordOcrMode = 'no-ocr';
+        let excelState = { ocr:'no-ocr', layout:'multi' };
+        let summaryState = { length:2, mode:'local' };
+        let translateState = { from:'en', to:'pt', layout:'keep' };
+        let workflowSteps = { mergeToc:true, normalizeA4:true, pageNumbers:true, watermark:false, watermarkText:'CONFIDENCIAL', compressVector:true };
+        let redactState = { pageNum:1, boxes:[], drawing:false, startX:0, startY:0, preview:null };
+        let scannerFilter = true;
+        let cloudConsentResolver = null;
+        // Comprimir PDF mirando um peso máximo (limite de upload do e-Proc/PJe).
+        let pdfCompressByTarget = false;
+        let pdfTargetMB = 10;
+        let pdfTargetFailures = [];
+        // Assinatura desenhada à mão.
+        let signState = { mode:'text', dataUrl:null, paths:[], width:180 };
+        // OCR: texto na tela ou PDF com camada de texto pesquisável.
+        let ocrOutput = 'text';
+
+        function refreshIcons() { if (window.lucide && window.lucide.createIcons) lucide.createIcons(); }
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m])); }
+
+        function setTheme(t) {
+            document.documentElement.setAttribute('data-theme', t);
+            try { localStorage.setItem('vj_theme', t); } catch (e) {}
+            ['light', 'sepia', 'dark'].forEach(x => {
+                const b = document.getElementById('theme-btn-' + x);
+                if (b) b.classList.toggle('active', x === t);
+            });
+        }
+
+        // Páginas abertas por clique duplo (file:///) não podem criar Workers.
+        // O OCR depende disso, então vale avisar em vez de deixar falhar no meio.
+        function avisarArquivoLocal() {
+            if (location.protocol !== 'file:') return;
+            const link = document.querySelector('link[rel="manifest"]');
+            if (link) link.remove();
+            const alvo = document.querySelector('#home-view section');
+            if (!alvo) return;
+            const bar = document.createElement('div');
+            bar.className = 'max-w-3xl mx-auto mt-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/50 text-left';
+            bar.innerHTML = '<p class="font-bold text-amber-700 text-xs mb-1">⚠️ Você abriu esta página direto do computador (<code>file:///</code>).</p>' +
+                '<p class="text-[11px] leading-relaxed theme-muted">Quase tudo funciona assim, mas o <strong>OCR</strong> não: ele precisa de um endereço web. Abra pelo endereço publicado (<code>https://...</code>), ou rode <code class="px-1 rounded theme-subtle border">npx serve</code> na pasta do projeto e use o <code>http://localhost</code> que aparecer.</p>';
+            alvo.appendChild(bar);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFallbacks();
+            avisarArquivoLocal();
+            let saved = 'light';
+            try { saved = localStorage.getItem('vj_theme') || 'light'; } catch (e) {}
+            setTheme(saved);
+            renderToolsGrid('all');
+            const keyInput = document.getElementById('gemini-api-key-input');
+            try { keyInput.value = localStorage.getItem('vj_gemini_api_key') || ''; } catch (e) {}
+            if ('serviceWorker' in navigator && location.protocol === 'https:') {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            }
+            refreshIcons();
+        });
+
+        /* ==================== CATÁLOGO ==================== */
+        function renderToolsGrid(cat) {
+            const grid = document.getElementById('tools-grid');
+            grid.innerHTML = '';
+            (cat === 'all' ? TOOLS : TOOLS.filter(t => t.cat === cat)).forEach(tool => {
+                const badgeColor = tool.cloud
+                    ? 'bg-amber-500/15 text-amber-600'
+                    : (tool.needsNet || tool.optionalCloud ? 'bg-sky-500/15 text-sky-600' : 'bg-red-500/10 text-[#e5322d]');
+                const badge = tool.badge ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full ' + badgeColor + '">' + escapeHtml(tool.badge) + '</span>' : '';
+                const card = document.createElement('div');
+                card.className = 'tool-card rounded-2xl p-5 cursor-pointer flex flex-col justify-between';
+                card.setAttribute('role', 'button');
+                card.setAttribute('tabindex', '0');
+                card.onclick = () => openTool(tool.id);
+                card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTool(tool.id); } };
+                card.innerHTML =
+                    '<div><div class="flex items-start justify-between mb-3">' +
+                    '<div class="w-11 h-11 rounded-xl ' + tool.color + ' text-white flex items-center justify-center shadow-sm"><i data-lucide="' + tool.icon + '" class="w-5 h-5"></i></div>' +
+                    badge + '</div>' +
+                    '<h3 class="font-bold text-base mb-1">' + escapeHtml(tool.title) + '</h3>' +
+                    '<p class="text-xs theme-muted leading-relaxed">' + escapeHtml(tool.desc) + '</p></div>' +
+                    (tool.cloud ? '<p class="mt-3 text-[10px] font-bold text-amber-600 uppercase tracking-wide">⚠️ Não use com documento sigiloso</p>' : '');
+                grid.appendChild(card);
+            });
+            refreshIcons();
+        }
+
+        function filterCategory(cat) {
+            showHome();
+            document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+            renderToolsGrid(cat);
+        }
+
+        function showHome() {
+            document.getElementById('home-view').classList.remove('hidden');
+            document.getElementById('workspace-view').classList.add('hidden');
+            releasePdfDoc();
+            activeTool = null; selectedFiles = [];
+        }
+
+        function releasePdfDoc() {
+            // Libera a memória do documento aberto. Sem isso, 50 PDFs grandes
+            // travavam a aba por falta de RAM.
+            if (loadedPdfDoc && loadedPdfDoc.destroy) { try { loadedPdfDoc.destroy(); } catch (e) {} }
+            loadedPdfDoc = null;
+        }
+
+        function openTool(toolId, keepFiles = false) {
+            activeTool = TOOLS.find(t => t.id === toolId);
+            if (!activeTool) return;
+            if (!keepFiles) { selectedFiles = []; releasePdfDoc(); }
+
+            document.getElementById('home-view').classList.add('hidden');
+            document.getElementById('workspace-view').classList.remove('hidden');
+            document.getElementById('ws-result-area').classList.add('hidden');
+            document.getElementById('ws-success-banner').classList.add('hidden');
+            document.getElementById('ai-summary-modal').classList.add('hidden');
+
+            const iconBox = document.getElementById('ws-icon-box');
+            iconBox.className = 'w-16 h-16 rounded-2xl mb-4 flex items-center justify-center text-white shadow-lg ' + activeTool.color;
+            iconBox.innerHTML = '<i data-lucide="' + activeTool.icon + '" class="w-8 h-8"></i>';
+            document.getElementById('ws-title').textContent = activeTool.title;
+            document.getElementById('ws-desc').textContent = activeTool.desc;
+
+            const warn = document.getElementById('ws-cloud-warning');
+            if (activeTool.cloud) {
+                warn.classList.remove('hidden');
+                warn.innerHTML = '<strong>⚠️ Atenção:</strong> esta é uma das duas ferramentas do site que <strong>enviam o texto do documento para o Google</strong>. Não a use com peças sigilosas, dados de menores ou documentos sob segredo de justiça. Todas as outras ferramentas processam tudo aqui dentro.';
+            } else if (activeTool.optionalCloud) {
+                warn.classList.remove('hidden');
+                warn.innerHTML = '<strong>Escolha antes de executar:</strong> o modo <strong>Local</strong> gera o resumo aqui dentro, sem enviar nada. O modo <strong>Google Gemini</strong> envia o texto do PDF para o Google e exige sua chave pessoal.';
+            } else if (activeTool.needsNet) {
+                warn.classList.remove('hidden');
+                warn.innerHTML = '<strong>Precisa de internet na primeira vez:</strong> o reconhecimento é feito no seu aparelho, mas o pacote do idioma português (cerca de 15 MB) é baixado uma vez e fica em cache.';
+            } else {
+                warn.classList.add('hidden');
+                warn.innerHTML = '';
+            }
+
+            const input = document.getElementById('ws-file-input');
+            input.accept = activeTool.accept; input.multiple = activeTool.multiple; input.value = '';
+
+            if (keepFiles && selectedFiles.length > 0) addFilesToStudio([]);
+            else {
+                document.getElementById('ws-initial-upload').classList.remove('hidden');
+                document.getElementById('ws-studio-layout').classList.add('hidden');
+            }
+            refreshIcons();
+        }
+
+        function triggerFileInput() { document.getElementById('ws-file-input').click(); }
+        function handleFileSelect(e) { if (e.target.files && e.target.files.length) addFilesToStudio(Array.from(e.target.files)); }
+        function handleInitialDrop(e) {
+            e.preventDefault();
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFilesToStudio(Array.from(e.dataTransfer.files));
+        }
+
+        async function addFilesToStudio(files) {
+            if (!activeTool) return;
+            if (files.length > 0) {
+                const merged = !activeTool.multiple ? [files[0]] : [...selectedFiles, ...files];
+                if (merged.length > MAX_FILES) {
+                    alert('Limite de ' + MAX_FILES + ' arquivos por vez. Os excedentes foram ignorados.');
+                }
+                selectedFiles = merged.slice(0, MAX_FILES);
+            }
+            document.getElementById('ws-initial-upload').classList.add('hidden');
+            document.getElementById('ws-studio-layout').classList.remove('hidden');
+            document.getElementById('sidebar-tool-title').textContent = activeTool.title;
+            document.getElementById('ws-execute-label').textContent = activeTool.btnLabel;
+            document.getElementById('floating-file-badge').textContent = selectedFiles.length;
+
+            const totalMB = (selectedFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2);
+            document.getElementById('studio-file-summary').textContent = selectedFiles.length + ' arquivo(s) • ' + totalMB + ' MB total';
+
+            if (selectedFiles[0] && /\.pdf$/i.test(selectedFiles[0].name)) {
+                try {
+                    releasePdfDoc();
+                    const buf = await selectedFiles[0].arrayBuffer();
+                    loadedPdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+                    totalPdfPages = loadedPdfDoc.numPages;
+                    splitState.intervals = [{ from: 1, to: totalPdfPages }];
+                    organizePagesState = Array.from({ length: totalPdfPages }, (_, i) => ({ originalIndex: i, pageNum: i + 1, rotation: 0, deleted: false }));
+                    redactState = { pageNum: 1, boxes: [], drawing: false, startX: 0, startY: 0, preview: null };
+                } catch (err) {
+                    alert('Não consegui abrir este PDF. Ele pode estar protegido por senha ou corrompido.' + NL + NL + 'Detalhe técnico: ' + err.message);
+                    return;
+                }
+            }
+
+            renderRightSidebarControls();
+            await renderLeftVisualStage();
+            if (activeTool.id === 'ai-summary') {
+                selectSummaryMode(summaryState.mode);
+                document.getElementById('ai-summary-modal').classList.remove('hidden');
+            }
+            refreshIcons();
+        }
+
+        /* ==================== PALCO VISUAL ==================== */
+        async function renderLeftVisualStage() {
+            const stage = document.getElementById('studio-visual-stage');
+            stage.innerHTML = '';
+            if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+
+            if (activeTool.id === 'redact' && loadedPdfDoc) {
+                stage.innerHTML = '<div class="flex flex-col items-center gap-3"><div class="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-900 text-white text-center max-w-md">🛡️ Arraste o dedo ou o mouse sobre a folha para marcar a Tarja Preta Irreversível</div><canvas id="redact-canvas" class="border-2 border-slate-800 rounded shadow-2xl cursor-crosshair bg-white max-w-full draw-surface"></canvas></div>';
+                await renderRedactCanvas();
+                return;
+            }
+
+            if (activeTool.id === 'split' && loadedPdfDoc && splitState.tab === 'range' && splitState.mode === 'custom') {
+                for (let i = 0; i < splitState.intervals.length; i++) {
+                    const intv = splitState.intervals[i];
+                    const box = document.createElement('div');
+                    box.className = 'flex flex-col items-center';
+                    box.innerHTML = '<span class="text-xs font-semibold mb-2">Intervalo ' + (i + 1) + '</span>';
+                    const dashed = document.createElement('div');
+                    dashed.className = 'border-2 border-dashed border-slate-400 rounded-xl p-4 flex items-center gap-4';
+                    dashed.appendChild(await createPageThumbCard(intv.from));
+                    if (intv.to > intv.from) {
+                        const dots = document.createElement('span');
+                        dots.className = 'font-extrabold text-xl px-1'; dots.textContent = '...';
+                        dashed.appendChild(dots);
+                        dashed.appendChild(await createPageThumbCard(intv.to));
+                    }
+                    box.appendChild(dashed); stage.appendChild(box);
+                }
+                return;
+            }
+
+            if (activeTool.id === 'organize' && loadedPdfDoc) {
+                for (let idx = 0; idx < organizePagesState.length; idx++) {
+                    const item = organizePagesState[idx];
+                    if (item.deleted) continue;
+                    const card = await createPageThumbCard(item.pageNum, item.rotation);
+                    card.classList.add('cursor-grab');
+                    const bar = document.createElement('div');
+                    bar.className = 'flex justify-center gap-2 mt-2';
+                    bar.innerHTML = '<button type="button" onclick="VJ.rotateOrganizePage(' + idx + ')" class="px-2 py-0.5 text-xs rounded theme-subtle border">↻</button><button type="button" onclick="VJ.deleteOrganizePage(' + idx + ')" class="px-2 py-0.5 text-xs rounded bg-red-500/10 text-red-600 font-bold">✕</button>';
+                    card.appendChild(bar); stage.appendChild(card);
+                }
+                if (window.Sortable) {
+                    sortableInstance = Sortable.create(stage, { animation:150, ghostClass:'sortable-ghost', onEnd:(e) => { const m = organizePagesState.splice(e.oldIndex, 1)[0]; organizePagesState.splice(e.newIndex, 0, m); } });
+                }
+                return;
+            }
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const card = document.createElement('div');
+                card.className = 'theme-surface rounded-xl p-4 shadow-md border w-48 flex flex-col items-center relative group cursor-grab';
+                const topBtns = document.createElement('div');
+                topBtns.className = 'absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition z-10';
+                if (i === 0 && /\.pdf$/i.test(file.name)) {
+                    topBtns.innerHTML += '<button type="button" onclick="VJ.openZoomModal(1)" class="w-6 h-6 rounded-full bg-slate-900 text-white text-xs flex items-center justify-center shadow" title="Lupa de Zoom">🔍</button>';
+                }
+                topBtns.innerHTML += '<button type="button" onclick="VJ.removeStudioFile(' + i + ')" class="w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow" aria-label="Remover arquivo">✕</button>';
+                card.appendChild(topBtns);
+
+                const thumbBox = document.createElement('div');
+                thumbBox.className = 'w-36 h-48 bg-amber-50/40 border rounded flex items-center justify-center overflow-hidden mb-3';
+                if (/\.pdf$/i.test(file.name)) {
+                    let tempDoc = null;
+                    try {
+                        const isFirst = (i === 0 && loadedPdfDoc);
+                        const pdf = isFirst ? loadedPdfDoc : (tempDoc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise);
+                        const page = await pdf.getPage(1);
+                        const vp = page.getViewport({ scale: 0.35 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = vp.width; canvas.height = vp.height;
+                        canvas.className = 'max-w-full max-h-full object-contain';
+                        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+                        thumbBox.appendChild(canvas);
+                    } catch (e) {
+                        thumbBox.innerHTML = '<span class="text-xs font-bold text-[#e5322d]">PDF</span>';
+                    } finally {
+                        // Libera cada documento temporário aberto só para a miniatura.
+                        if (tempDoc && tempDoc.destroy) { try { tempDoc.destroy(); } catch (e) {} }
+                    }
+                } else {
+                    thumbBox.innerHTML = '<span class="text-xs font-bold uppercase theme-muted">' + escapeHtml(file.name.split('.').pop()) + '</span>';
+                }
+
+                const nameLabel = document.createElement('p');
+                nameLabel.className = 'text-xs font-medium truncate w-full text-center';
+                nameLabel.textContent = (i + 1) + '. ' + file.name;
+                card.appendChild(thumbBox); card.appendChild(nameLabel); stage.appendChild(card);
+            }
+
+            if (window.Sortable && selectedFiles.length > 1) {
+                sortableInstance = Sortable.create(stage, { animation:150, ghostClass:'sortable-ghost', onEnd:(e) => { const m = selectedFiles.splice(e.oldIndex, 1)[0]; selectedFiles.splice(e.newIndex, 0, m); renderLeftVisualStage(); } });
+            }
+        }
+
+        function removeStudioFile(i) {
+            selectedFiles.splice(i, 1);
+            if (!selectedFiles.length) openTool(activeTool.id);
+            else addFilesToStudio([]);
+        }
+
+        async function createPageThumbCard(pageNumber, rotation = 0) {
+            const wrap = document.createElement('div');
+            wrap.className = 'theme-surface rounded-xl p-3 shadow border w-40 flex flex-col items-center relative group';
+            const safePage = Math.max(1, Math.min(totalPdfPages, pageNumber));
+
+            const zoomBtn = document.createElement('button');
+            zoomBtn.type = 'button';
+            zoomBtn.className = 'absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-900 text-white text-xs flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition z-10 shadow';
+            zoomBtn.textContent = '🔍';
+            zoomBtn.onclick = (e) => { e.stopPropagation(); openZoomModal(safePage); };
+            wrap.appendChild(zoomBtn);
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'w-32 h-44 object-contain border rounded mb-2 bg-white';
+            canvas.style.transform = 'rotate(' + rotation + 'deg)';
+            if (loadedPdfDoc) {
+                const page = await loadedPdfDoc.getPage(safePage);
+                const vp = page.getViewport({ scale: 0.3 });
+                canvas.width = vp.width; canvas.height = vp.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+            }
+            const lbl = document.createElement('span');
+            lbl.className = 'text-xs font-semibold'; lbl.textContent = 'Pág. ' + safePage;
+            wrap.appendChild(canvas); wrap.appendChild(lbl);
+            return wrap;
+        }
+
+        async function openZoomModal(pageNum) {
+            if (!loadedPdfDoc) return;
+            zoomState.pageNum = pageNum;
+            document.getElementById('zoom-modal').classList.remove('hidden');
+            await renderZoomPage();
+        }
+        function closeZoomModal() { document.getElementById('zoom-modal').classList.add('hidden'); }
+        async function changeZoomPage(d) {
+            if (!loadedPdfDoc) return;
+            zoomState.pageNum = Math.max(1, Math.min(totalPdfPages, zoomState.pageNum + d));
+            await renderZoomPage();
+        }
+        async function renderZoomPage() {
+            if (!loadedPdfDoc) return;
+            document.getElementById('zoom-modal-title').textContent = '🔍 Lupa de Alta Resolução — Página ' + zoomState.pageNum + ' de ' + totalPdfPages;
+            const page = await loadedPdfDoc.getPage(zoomState.pageNum);
+            const vp = page.getViewport({ scale: 1.75 });
+            const canvas = document.getElementById('zoom-modal-canvas');
+            canvas.width = vp.width; canvas.height = vp.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        }
+
+        /* ==================== BARRA LATERAL ==================== */
+        function renderRightSidebarControls() {
+            const box = document.getElementById('sidebar-dynamic-controls');
+            box.innerHTML = '';
+            if (!activeTool) return;
+
+            if (activeTool.id === 'workflow') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs"><strong>⚡ Esteira de Automação:</strong> marque as etapas que deseja executar em sequência automática:</div>' +
+                    '<div class="space-y-2">' +
+                    '<label class="flex items-center gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" ' + (workflowSteps.mergeToc ? 'checked' : '') + ' onchange="VJ.setWorkflow(\'mergeToc\',this.checked)" class="accent-[#e5322d]"><span class="font-bold text-xs">1. Juntar PDFs + Sumário Clicável</span></label>' +
+                    '<label class="flex items-center gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" ' + (workflowSteps.normalizeA4 ? 'checked' : '') + ' onchange="VJ.setWorkflow(\'normalizeA4\',this.checked)" class="accent-[#e5322d]"><span class="font-bold text-xs">2. Padronizar Escala para A4</span></label>' +
+                    '<label class="flex items-center gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" ' + (workflowSteps.pageNumbers ? 'checked' : '') + ' onchange="VJ.setWorkflow(\'pageNumbers\',this.checked)" class="accent-[#e5322d]"><span class="font-bold text-xs">3. Numerar Folhas (Fls. X / Y)</span></label>' +
+                    '<label class="flex items-center gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" ' + (workflowSteps.watermark ? 'checked' : '') + ' onchange="VJ.setWorkflow(\'watermark\',this.checked)" class="accent-[#e5322d]"><div class="w-full"><span class="font-bold text-xs block">4. Marca d\'Água</span><input type="text" value="' + escapeHtml(workflowSteps.watermarkText) + '" onchange="VJ.setWorkflow(\'watermarkText\',this.value)" class="mt-1 w-full rounded theme-input px-2 py-1 text-xs"></div></label>' +
+                    '<label class="flex items-center gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" ' + (workflowSteps.compressVector ? 'checked' : '') + ' onchange="VJ.setWorkflow(\'compressVector\',this.checked)" class="accent-[#e5322d]"><span class="font-bold text-xs">5. Otimização Vetorial & Limpeza</span></label>' +
+                    '</div>';
+                return;
+            }
+
+            if (activeTool.id === 'split') {
+                box.innerHTML =
+                    '<div class="grid grid-cols-3 border rounded-xl overflow-hidden text-center text-xs font-bold">' +
+                    '<button type="button" onclick="VJ.setSplitTab(\'range\')" class="p-3 ' + (splitState.tab === 'range' ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">Intervalo</button>' +
+                    '<button type="button" onclick="VJ.setSplitTab(\'pages\')" class="p-3 ' + (splitState.tab === 'pages' ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">Páginas</button>' +
+                    '<button type="button" onclick="VJ.setSplitTab(\'size\')" class="p-3 ' + (splitState.tab === 'size' ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">Tamanho</button>' +
+                    '</div><div id="split-sub-body" class="space-y-3 pt-2"></div>';
+                renderSplitSubBody();
+                return;
+            }
+
+            if (activeTool.id === 'compress') {
+                const levels = [
+                    { val:'vector', title:'OTIMIZAÇÃO VETORIAL (TEXTO SELECIONÁVEL)', desc:'Limpa metadados e comprime streams mantendo Ctrl+F' },
+                    { val:'0.40', title:'EXTREMA COMPRESSÃO', desc:'Menos qualidade visual, altíssima redução de MB' },
+                    { val:'0.65', title:'COMPRESSÃO RECOMENDADA', desc:'Boa qualidade, boa compressão' },
+                    { val:'0.85', title:'BAIXA COMPRESSÃO', desc:'Alta qualidade, menos compressão' }
+                ];
+                box.innerHTML =
+                    '<div class="grid grid-cols-2 border rounded-xl overflow-hidden text-center text-xs font-bold">' +
+                    '<button type="button" onclick="VJ.setPdfTargetMode(false)" class="p-3 ' + (!pdfCompressByTarget ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">🎚️ Por nível</button>' +
+                    '<button type="button" onclick="VJ.setPdfTargetMode(true)" class="p-3 ' + (pdfCompressByTarget ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">🎯 Por peso máximo</button>' +
+                    '</div>' +
+                    (pdfCompressByTarget
+                        ? '<div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-xs leading-relaxed">Informe o limite que o sistema aceita e o programa procura sozinho o melhor resultado que cabe nele. Ele sempre tenta primeiro a <strong>otimização vetorial</strong>, que mantém o texto selecionável; só parte para transformar as páginas em imagem se não couber de outro jeito.</div>' +
+                          '<div><label class="block text-xs font-bold mb-1" for="pdf-target-mb">Peso máximo por arquivo (MB):</label>' +
+                          '<input type="number" id="pdf-target-mb" min="0.2" step="0.5" value="' + pdfTargetMB + '" oninput="VJ.setPdfTargetMB(this.value)" class="w-full rounded-lg theme-input p-2.5 text-center font-extrabold text-base"></div>' +
+                          '<div class="grid grid-cols-4 gap-1.5">' +
+                          [1.5, 5, 10, 25].map(v => '<button type="button" onclick="VJ.setPdfTargetMB(' + v + ',true)" class="py-2 rounded-lg text-[11px] font-bold border ' + (pdfTargetMB === v ? 'border-[#e5322d] text-[#e5322d] bg-red-500/10' : 'theme-subtle') + '">' + String(v).replace('.', ',') + ' MB</button>').join('') +
+                          '</div>' +
+                          '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">São até <strong>7 tentativas</strong>, cada uma reconstruindo o PDF e pesando o resultado de verdade. Num arquivo com muitas páginas isso leva um tempo — a barra mostra a tentativa e a página atual.</div>'
+                        : '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">Os três modos de porcentagem transformam as páginas em imagem: o arquivo fica menor, mas o texto deixa de ser selecionável e o Ctrl+F para de funcionar.</div>' +
+                          levels.map(l => '<div onclick="VJ.setCompressMode(\'' + l.val + '\')" class="option-card ' + (compressMode === l.val ? 'selected' : '') + ' rounded-xl p-3.5 flex items-center justify-between"><div><p class="font-extrabold text-xs text-[#e5322d]">' + l.title + '</p><p class="text-[11px] theme-muted mt-0.5">' + l.desc + '</p></div>' + (compressMode === l.val ? '<span class="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs flex items-center justify-center font-bold">✓</span>' : '') + '</div>').join('')
+                    );
+                return;
+            }
+
+            if (activeTool.id === 'pdf-to-word') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-600">✓ Motor OpenXML (.docx) Nativo Ativo!</div>' +
+                    '<div onclick="VJ.setWordOcr(\'no-ocr\')" class="option-card ' + (wordOcrMode === 'no-ocr' ? 'selected' : '') + ' rounded-xl p-3.5"><p class="font-bold text-sm">Sem ROC</p><p class="text-xs theme-muted">PDFs com texto selecionável.</p></div>' +
+                    '<div onclick="VJ.setWordOcr(\'ocr\')" class="option-card ' + (wordOcrMode === 'ocr' ? 'selected' : '') + ' rounded-xl p-3.5"><p class="font-bold text-sm">ROC (OCR)</p><p class="text-xs theme-muted">PDFs escaneados. Mais lento e precisa baixar o idioma na 1ª vez.</p></div>' +
+                    '<label class="flex items-center gap-2 text-xs font-semibold pt-2"><input type="checkbox" id="word-smart-merge" checked class="accent-[#e5322d]"> Fusão inteligente de parágrafos</label>' +
+                    '<label class="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" id="word-abnt-quotes" checked class="accent-[#e5322d]"> Padrão ABNT (Recuo 4cm + Artigos)</label>';
+                return;
+            }
+
+            if (activeTool.id === 'pdf-to-excel') {
+                box.innerHTML =
+                    '<div onclick="VJ.setExcel(\'ocr\',\'no-ocr\')" class="option-card ' + (excelState.ocr === 'no-ocr' ? 'selected' : '') + ' rounded-xl p-3.5"><p class="font-bold text-sm">Sem ROC</p><p class="text-xs theme-muted">Converte valores R$ em números somáveis.</p></div>' +
+                    '<div onclick="VJ.setExcel(\'ocr\',\'ocr\')" class="option-card ' + (excelState.ocr === 'ocr' ? 'selected' : '') + ' rounded-xl p-3.5"><p class="font-bold text-sm">ROC (OCR)</p><p class="text-xs theme-muted">Reconhece tabelas escaneadas.</p></div>' +
+                    '<div class="grid grid-cols-2 gap-2 pt-2">' +
+                    '<button type="button" onclick="VJ.setExcel(\'layout\',\'single\')" class="py-2 rounded-lg text-xs font-bold border ' + (excelState.layout === 'single' ? 'border-[#e5322d] text-[#e5322d]' : 'theme-subtle') + '">Uma folha</button>' +
+                    '<button type="button" onclick="VJ.setExcel(\'layout\',\'multi\')" class="py-2 rounded-lg text-xs font-bold border ' + (excelState.layout === 'multi' ? 'border-[#e5322d] text-[#e5322d]' : 'theme-subtle') + '">Várias folhas</button></div>';
+                return;
+            }
+
+            if (activeTool.id === 'redact') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 font-semibold">🛡️ Modo LGPD: as páginas tarjadas são achatadas em imagem, então é impossível copiar o texto que estava sob a tarja.</div>' +
+                    '<div class="space-y-3">' +
+                    '<div class="flex items-center justify-between"><span class="text-xs font-bold">Página: ' + redactState.pageNum + ' / ' + totalPdfPages + '</span><div class="flex gap-1"><button type="button" onclick="VJ.changeRedactPage(-1)" class="px-2.5 py-1 rounded theme-subtle border text-xs font-bold">◀</button><button type="button" onclick="VJ.changeRedactPage(1)" class="px-2.5 py-1 rounded theme-subtle border text-xs font-bold">▶</button></div></div>' +
+                    '<p class="text-xs theme-muted">Tarjas aplicadas: <strong id="redact-count">' + redactState.boxes.length + '</strong></p>' +
+                    '<button type="button" onclick="VJ.undoRedact()" class="w-full py-2 rounded-lg theme-subtle border text-xs font-bold">↩ Desfazer Última Tarja</button>' +
+                    '<button type="button" onclick="VJ.clearRedact()" class="w-full py-2 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold">Limpar Todas as Tarjas</button>' +
+                    '</div>';
+                return;
+            }
+
+            if (activeTool.id === 'sign') {
+                const isDraw = signState.mode === 'draw';
+                box.innerHTML =
+                    '<div class="grid grid-cols-2 border rounded-xl overflow-hidden text-center text-xs font-bold">' +
+                    '<button type="button" onclick="VJ.setSignMode(\'text\')" class="p-3 ' + (!isDraw ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">⌨️ Texto</button>' +
+                    '<button type="button" onclick="VJ.setSignMode(\'draw\')" class="p-3 ' + (isDraw ? 'bg-red-500/10 text-[#e5322d] border-b-2 border-[#e5322d]' : 'theme-subtle') + '">✍️ Desenhar</button>' +
+                    '</div>' +
+                    (isDraw
+                        ? '<p class="text-xs font-bold">Assine no quadro abaixo com o dedo, a caneta ou o mouse:</p>' +
+                          '<canvas id="sign-pad" width="640" height="260" class="w-full rounded-xl border-2 border-dashed bg-white draw-surface" style="border-color:var(--border-color);touch-action:none;"></canvas>' +
+                          '<div class="grid grid-cols-2 gap-2">' +
+                          '<button type="button" onclick="VJ.undoSignStroke()" class="py-2 rounded-lg theme-subtle border text-xs font-bold">↩ Desfazer traço</button>' +
+                          '<button type="button" onclick="VJ.clearSignPad()" class="py-2 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold">Limpar</button>' +
+                          '</div>' +
+                          '<div><label class="block text-xs font-bold mb-1" for="sign-width">Largura na página (<span id="lbl-signw">' + signState.width + '</span> pt ≈ ' + (signState.width / 28).toFixed(1) + ' cm):</label>' +
+                          '<input type="range" id="sign-width" min="80" max="360" value="' + signState.width + '" oninput="VJ.setSignWidth(this.value)" class="w-full accent-[#e5322d]"></div>'
+                        : '<label class="block text-xs font-bold" for="sign-text-input">Texto da Assinatura / Rubrica:</label>' +
+                          '<input type="text" id="sign-text-input" value="Assinado Digitalmente — VJ Converter" class="w-full rounded-xl theme-input p-2.5 text-xs font-bold">'
+                    ) +
+                    '<label class="block text-xs font-bold" for="sign-pos">Posição:</label>' +
+                    '<select id="sign-pos" class="w-full rounded-xl theme-input p-2.5 text-xs"><option value="bottom-right">Rodapé Direito</option><option value="bottom-center">Rodapé Centralizado</option><option value="top-right">Topo Direito</option></select>' +
+                    '<label class="flex items-center gap-2 text-xs font-semibold pt-1"><input type="checkbox" id="sign-first-only" class="accent-[#e5322d]"> Apenas na primeira página</label>' +
+                    '<p class="text-[11px] theme-muted">Isto é um carimbo visual. <strong>Não é assinatura digital com certificado ICP-Brasil</strong> e não tem a mesma validade jurídica — para isso use o Assinador Gov.br ou o seu token.</p>';
+                if (isDraw) setTimeout(initSignPad, 0);
+                return;
+            }
+
+            if (activeTool.id === 'crop') {
+                box.innerHTML = '<label class="block text-xs font-bold">Recortar Margens (pontos — 28 pt ≈ 1 cm):</label><div class="grid grid-cols-2 gap-2 text-xs"><div>Topo:<input type="number" id="crop-top" value="20" class="w-full rounded theme-input p-1.5 font-bold"></div><div>Base:<input type="number" id="crop-bottom" value="20" class="w-full rounded theme-input p-1.5 font-bold"></div><div>Esq:<input type="number" id="crop-left" value="20" class="w-full rounded theme-input p-1.5 font-bold"></div><div>Dir:<input type="number" id="crop-right" value="20" class="w-full rounded theme-input p-1.5 font-bold"></div></div>';
+                return;
+            }
+
+            if (activeTool.id === 'translate') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-[11px] text-amber-700 leading-relaxed"><strong>⚠️ Esta ferramenta envia o texto das páginas para o Google.</strong> Ela é a única do site que faz isso obrigatoriamente. Não use com documento sigiloso.</div>' +
+                    '<div class="p-3 rounded-xl theme-subtle border"><label class="block text-xs font-bold mb-1" for="tr-from">De:</label><select id="tr-from" onchange="VJ.setTranslate(\'from\',this.value)" class="w-full rounded theme-input p-2 text-xs"><option value="en">Inglês</option><option value="pt">Português</option><option value="es">Espanhol</option><option value="fr">Francês</option><option value="it">Italiano</option><option value="de">Alemão</option></select></div>' +
+                    '<div class="p-3 rounded-xl theme-subtle border"><label class="block text-xs font-bold mb-1" for="tr-to">Para:</label><select id="tr-to" onchange="VJ.setTranslate(\'to\',this.value)" class="w-full rounded theme-input p-2 text-xs"><option value="pt">Português</option><option value="en">Inglês</option><option value="es">Espanhol</option><option value="fr">Francês</option><option value="it">Italiano</option><option value="de">Alemão</option></select></div>' +
+                    '<div onclick="VJ.setTranslate(\'layout\',\'keep\')" class="option-card option-card-purple ' + (translateState.layout === 'keep' ? 'selected' : '') + ' rounded-xl p-3"><p class="font-bold text-xs">Manter layout (gera novo PDF)</p></div>' +
+                    '<div onclick="VJ.setTranslate(\'layout\',\'text\')" class="option-card option-card-purple ' + (translateState.layout === 'text' ? 'selected' : '') + ' rounded-xl p-3"><p class="font-bold text-xs">Somente texto</p></div>';
+                const f = document.getElementById('tr-from'); if (f) f.value = translateState.from;
+                const t = document.getElementById('tr-to'); if (t) t.value = translateState.to;
+                return;
+            }
+
+            if (activeTool.id === 'jpg-to-pdf') {
+                box.innerHTML =
+                    '<label class="flex items-start gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" ' + (scannerFilter ? 'checked' : '') + ' onchange="VJ.setScannerFilter(this.checked)" class="mt-0.5 accent-[#e5322d]"><div><span class="font-bold text-xs block">Filtro Super Nitidez (tipo scanner)</span><span class="text-[11px] theme-muted">Clareia o fundo do papel, remove a sombra cinza da foto e realça o texto. Desligue para fotos coloridas comuns.</span></div></label>' +
+                    '<p class="text-[11px] theme-muted">Aceita JPG, PNG, WEBP, GIF, BMP e HEIC (se o seu navegador souber abrir HEIC). Cada imagem vira uma folha A4.</p>';
+                return;
+            }
+
+            if (activeTool.id === 'merge' || activeTool.id === 'toc-builder') {
+                box.innerHTML = '<label class="flex items-start gap-2.5 p-3 rounded-xl theme-subtle border cursor-pointer"><input type="checkbox" id="merge-generate-toc" checked class="mt-1 accent-[#e5322d]"><div><span class="font-bold text-xs block">Gerar Sumário Clicável no início</span><span class="text-[11px] theme-muted">Usa quantas páginas forem necessárias — sem limite de anexos.</span></div></label><input type="text" id="toc-main-title" value="SUMÁRIO DE DOCUMENTOS E ANEXOS" class="w-full rounded-xl theme-input p-2.5 text-xs">';
+            } else if (activeTool.id === 'watermark') {
+                box.innerHTML = '<label class="block text-xs font-bold mb-1" for="watermark-text">Texto da Marca d\'Água:</label><input type="text" id="watermark-text" value="CONFIDENCIAL" class="w-full rounded-xl theme-input p-2.5 text-xs"><label class="block text-xs font-bold mb-1 mt-2" for="watermark-opacity">Opacidade:</label><input type="range" id="watermark-opacity" min="5" max="60" value="25" class="w-full accent-[#e5322d]">';
+            } else if (activeTool.id === 'rotate') {
+                box.innerHTML = '<select id="rotate-angle" class="w-full rounded-xl theme-input p-2.5 text-xs"><option value="90">Rodar 90° Horário</option><option value="180">Rodar 180°</option><option value="270">Rodar 90° Anti-horário</option></select>';
+            } else if (activeTool.id === 'pagenumbers') {
+                box.innerHTML = '<label class="block text-xs font-bold mb-1" for="pagenum-start">Começar a contar em:</label><input type="number" id="pagenum-start" value="1" min="1" class="w-full rounded-xl theme-input p-2.5 text-xs font-bold"><label class="flex items-center gap-2 text-xs font-semibold pt-2"><input type="checkbox" id="pagenum-fls" checked class="accent-[#e5322d]"> Usar formato judicial "Fls. X / Y"</label>';
+            } else if (activeTool.id === 'ocr') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs leading-relaxed">O reconhecimento roda no seu aparelho. Na primeira vez, o pacote do idioma português é baixado e fica guardado.</div>' +
+                    '<p class="text-xs font-bold">O que você quer receber:</p>' +
+                    '<div onclick="VJ.setOcrOutput(\'text\')" class="option-card ' + (ocrOutput === 'text' ? 'selected' : '') + ' rounded-xl p-3.5"><p class="font-bold text-sm">📝 Texto na tela</p><p class="text-xs theme-muted">Para copiar e colar em outro lugar.</p></div>' +
+                    '<div onclick="VJ.setOcrOutput(\'pdf\')" class="option-card ' + (ocrOutput === 'pdf' ? 'selected' : '') + ' rounded-xl p-3.5"><p class="font-bold text-sm">🔍 PDF pesquisável</p><p class="text-xs theme-muted">O documento continua com a cara do escaneamento, mas o Ctrl+F passa a encontrar as palavras.</p></div>' +
+                    (ocrOutput === 'pdf' ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">É a operação mais demorada do site: cada página passa pelo reconhecimento inteiro. Num documento de 20 páginas, conte alguns minutos e deixe a aba aberta.</div>' : '');
+                return;
+            } else if (activeTool.id === 'compare') {
+                box.innerHTML = '<div class="p-3 rounded-xl theme-subtle border text-xs">Adicione exatamente <strong>2 PDFs</strong> com o botão + e clique em comparar. O resultado mostra as linhas adicionadas e removidas.</div>';
+            } else {
+                box.innerHTML = '<p class="text-xs theme-muted text-center py-4">Arraste os cartões à esquerda para ordenar ou toque no botão abaixo para processar.</p>';
+            }
+        }
+
+        /* ==================== CONTROLES DO SPLIT ==================== */
+        function setSplitTab(tab) { splitState.tab = tab; renderRightSidebarControls(); renderLeftVisualStage(); }
+        function setSplitMode(mode) { splitState.mode = mode; renderSplitSubBody(); renderLeftVisualStage(); }
+        function renderSplitSubBody() {
+            const c = document.getElementById('split-sub-body');
+            if (!c) return;
+            if (splitState.tab === 'range') {
+                let html = '<div class="grid grid-cols-2 gap-1.5"><button type="button" onclick="VJ.setSplitMode(\'custom\')" class="py-2 rounded-lg text-xs font-bold border ' + (splitState.mode === 'custom' ? 'border-[#e5322d] text-[#e5322d]' : 'theme-subtle') + '">Personalizado</button><button type="button" onclick="VJ.setSplitMode(\'fixed\')" class="py-2 rounded-lg text-xs font-bold border ' + (splitState.mode === 'fixed' ? 'border-[#e5322d] text-[#e5322d]' : 'theme-subtle') + '">A cada X páginas</button></div>';
+                if (splitState.mode === 'custom') {
+                    splitState.intervals.forEach((intv, idx) => {
+                        html += '<div class="p-3 rounded-xl theme-subtle border space-y-2"><div class="flex justify-between text-xs font-bold"><span>Intervalo ' + (idx + 1) + '</span>' + (splitState.intervals.length > 1 ? '<button type="button" onclick="VJ.removeSplitInterval(' + idx + ')" class="text-red-500">✕</button>' : '') + '</div><div class="grid grid-cols-2 gap-2 text-xs"><input type="number" min="1" max="' + totalPdfPages + '" value="' + intv.from + '" onchange="VJ.updateSplitIntv(' + idx + ',\'from\',this.value)" class="p-1.5 rounded theme-input text-center font-bold"><input type="number" min="1" max="' + totalPdfPages + '" value="' + intv.to + '" onchange="VJ.updateSplitIntv(' + idx + ',\'to\',this.value)" class="p-1.5 rounded theme-input text-center font-bold"></div></div>';
+                    });
+                    html += '<button type="button" onclick="VJ.addSplitInterval()" class="w-full py-2 rounded-lg border border-[#e5322d] text-[#e5322d] text-xs font-bold">+ Adicionar Intervalo</button><label class="flex items-center gap-2 text-xs pt-1"><input type="checkbox" ' + (splitState.mergeIntervals ? 'checked' : '') + ' onchange="VJ.setMergeIntervals(this.checked)" class="accent-[#e5322d]"> Mesclar intervalos em um único PDF</label>';
+                } else {
+                    html += '<div class="p-3 rounded-xl theme-subtle border text-xs"><label class="block font-bold mb-1" for="split-fixed">Dividir a cada X páginas:</label><input type="number" id="split-fixed" min="1" value="' + splitState.fixedStep + '" onchange="VJ.setFixedStep(this.value)" class="w-full rounded theme-input p-2 font-bold"></div>';
+                }
+                c.innerHTML = html;
+            } else if (splitState.tab === 'pages') {
+                c.innerHTML = '<div class="p-3 rounded-xl theme-subtle border text-xs">Extrair todas as <strong>' + totalPdfPages + ' páginas</strong> em PDFs separados (.zip).</div>';
+            } else {
+                c.innerHTML = '<div class="p-3 rounded-xl theme-subtle border text-xs"><label class="block font-bold mb-1" for="split-size">Peso máximo por parte (MB):</label><input type="number" id="split-size" min="0.5" step="0.5" value="' + splitState.maxSizeMB + '" onchange="VJ.setMaxSize(this.value)" class="w-full rounded theme-input p-2 font-bold"><p class="text-[11px] theme-muted mt-2">Cada parte é gerada e <strong>pesada de verdade</strong> antes de fechar, então nenhuma passa do limite — exceto quando uma única página sozinha já é maior que o máximo, e nesse caso você é avisado no fim.</p></div>';
+            }
+        }
+        function addSplitInterval() {
+            const last = splitState.intervals[splitState.intervals.length - 1];
+            splitState.intervals.push({ from: Math.min(totalPdfPages, last.to + 1), to: totalPdfPages });
+            renderSplitSubBody(); renderLeftVisualStage();
+        }
+        function removeSplitInterval(idx) { splitState.intervals.splice(idx, 1); renderSplitSubBody(); renderLeftVisualStage(); }
+        function updateSplitIntv(idx, f, v) {
+            splitState.intervals[idx][f] = Math.max(1, Math.min(totalPdfPages, parseInt(v, 10) || 1));
+            renderLeftVisualStage();
+        }
+        function rotateOrganizePage(idx) { organizePagesState[idx].rotation = (organizePagesState[idx].rotation + 90) % 360; renderLeftVisualStage(); }
+        function deleteOrganizePage(idx) { organizePagesState.splice(idx, 1); renderLeftVisualStage(); }
+
+        function selectSummaryMode(m) {
+            summaryState.mode = m;
+            document.getElementById('sum-mode-local').classList.toggle('selected', m === 'local');
+            document.getElementById('sum-mode-cloud').classList.toggle('selected', m === 'cloud');
+            const warn = document.getElementById('sum-cloud-warn');
+            if (m === 'cloud') {
+                let hasKey = false;
+                try { hasKey = (localStorage.getItem('vj_gemini_api_key') || '').trim().length > 10; } catch (e) {}
+                warn.classList.remove('hidden');
+                warn.innerHTML = hasKey
+                    ? '<strong>⚠️ O texto do PDF será enviado ao Google</strong> usando a sua chave pessoal. Não use com documento sigiloso.'
+                    : '<strong>Você ainda não cadastrou uma chave.</strong> Feche esta janela, clique em 🔑 Chave IA no topo e cole sua chave do Google AI Studio — ou use o modo Local, que funciona sem chave.';
+            } else {
+                warn.classList.add('hidden');
+            }
+        }
+        function closeAiSummaryModalAndRun() {
+            summaryState.length = parseInt(document.getElementById('summary-length-slider').value, 10) || 2;
+            document.getElementById('ai-summary-modal').classList.add('hidden');
+            executeActiveTool();
+        }
+
+        function setProgress(pct, msg) {
+            document.getElementById('ws-progress-bar').style.width = Math.max(5, Math.min(100, pct)) + '%';
+            if (msg) document.getElementById('ws-progress-text').textContent = msg;
+        }
+
+        /* ====================================================================
+           CONSENTIMENTO EXPLÍCITO ANTES DE ENVIAR TEXTO PARA FORA
+        ==================================================================== */
+        function askCloudConsent(serviceLabel, whatIsSent) {
+            return new Promise(resolve => {
+                cloudConsentResolver = resolve;
+                document.getElementById('cloud-consent-text').innerHTML =
+                    '<p>Você está prestes a enviar <strong>' + escapeHtml(whatIsSent) + '</strong> para <strong>' + escapeHtml(serviceLabel) + '</strong>.</p>' +
+                    '<p>A partir do momento em que o texto sai do seu aparelho, ele passa a ser tratado pelas políticas desse serviço, e não mais por este site.</p>' +
+                    '<p class="font-bold text-amber-700">Não envie peças sob segredo de justiça, dados de crianças e adolescentes ou documentos com dados pessoais sensíveis.</p>';
+                document.getElementById('cloud-consent-check').checked = false;
+                document.getElementById('cloud-consent-modal').classList.remove('hidden');
+            });
+        }
+        function resolveCloudConsent(ok) {
+            if (ok && !document.getElementById('cloud-consent-check').checked) {
+                alert('Marque a confirmação para continuar, ou clique em Cancelar.');
+                return;
+            }
+            document.getElementById('cloud-consent-modal').classList.add('hidden');
+            if (cloudConsentResolver) { cloudConsentResolver(ok); cloudConsentResolver = null; }
+        }
+
+        /* ====================================================================
+           EXECUTOR
+        ==================================================================== */
+        async function executeActiveTool() {
+            if (!activeTool || !selectedFiles.length) return;
+            const prog = document.getElementById('ws-progress-area');
+            document.getElementById('ws-result-area').classList.add('hidden');
+            document.getElementById('ws-success-banner').classList.add('hidden');
+            prog.classList.remove('hidden');
+            setProgress(15, 'Processando ' + activeTool.title + '...');
+
+            try {
+                switch (activeTool.id) {
+                    case 'workflow': await runOneClickWorkflow(); break;
+                    case 'split': await runAdvancedSplitPDF(); break;
+                    case 'compress':
+                        pdfTargetFailures = [];
+                        await runBatch(pdfCompressByTarget ? compressPdfToTargetBlob : compressSinglePdfBlob, '_Comprimido.pdf');
+                        reportPdfTargetFailures();
+                        break;
+                    case 'pdf-to-word': await runBatch(convertSinglePdfToDocxBlob, '.docx'); break;
+                    case 'pdf-to-excel': await runBatch(convertSinglePdfToXlsxBlob, '.xlsx'); break;
+                    case 'redact': await runApplyRedactionsPDF(); break;
+                    case 'sign': await runSignPDF(); break;
+                    case 'crop': await runBatch(cropSinglePdfBlob, '_Recortado.pdf'); break;
+                    case 'unlock': await runBatch(unlockAndSanitizePdfBlob, '_Limpo.pdf'); break;
+                    case 'ai-summary': await runAdvancedAiSummary(); break;
+                    case 'translate': await runAdvancedTranslatePdf(); break;
+                    case 'merge':
+                    case 'toc-builder': await runMergeAndTocPDF(); break;
+                    case 'normalize-a4': await runBatch(normalizePdfToA4Blob, '_A4.pdf'); break;
+                    case 'extract-media': await runExtractMediaFromPdfs(); break;
+                    case 'jpg-to-pdf': await runJpgToPDFSuperSharp(); break;
+                    case 'pdf-to-ppt': await runBatch(convertSinglePdfToPptxBlob, '.pptx'); break;
+                    case 'word-to-pdf': await runBatch(convertSingleDocxToPdfBlob, '.pdf'); break;
+                    case 'pdf-to-jpg': await runPdfToJpg(); break;
+                    case 'organize': await runOrganizePDF(); break;
+                    case 'rotate': await runBatch(rotateSinglePdfBlob, '_Rotacionado.pdf'); break;
+                    case 'watermark': await runBatch(watermarkSinglePdfBlob, '_MarcaDagua.pdf'); break;
+                    case 'pagenumbers': await runBatch(pageNumbersSinglePdfBlob, '_Numerado.pdf'); break;
+                    case 'ocr': await runOcrPdf(); break;
+                    case 'compare': await runComparePdf(); break;
+                    case 'pdf-to-md': await runPdfToMarkdownBatch(); break;
+                }
+                saveToHistory(activeTool.title, selectedFiles.length + ' arq.');
+            } catch (err) {
+                console.error(err);
+                alert(friendlyError(err));
+            } finally {
+                prog.classList.add('hidden');
+            }
+        }
+
+        function friendlyError(err) {
+            const m = String((err && err.message) || err);
+            if (/encrypt|password/i.test(m)) return 'Este PDF está protegido por senha. Abra-o no leitor, salve uma cópia sem senha e tente de novo.';
+            if (/WinAnsi|cannot encode|encode/i.test(m)) return 'Havia um caractere que a fonte do PDF não desenha (emoji ou símbolo). Tente novamente — o texto agora é limpo automaticamente. Se persistir, retire símbolos do nome dos arquivos.';
+            if (/fetch|network|Failed to fetch/i.test(m)) return 'Falha de conexão. Esta função precisa de internet. Verifique sua rede e tente de novo.';
+            if (/memory|Array buffer allocation|allocation/i.test(m)) return 'O navegador ficou sem memória. Tente processar menos arquivos por vez, ou use o modo de compressão vetorial.';
+            return 'Não consegui concluir esta operação.' + NL + NL + 'Detalhe técnico: ' + m;
+        }
+
+        /* ==================== TARJA PRETA ==================== */
+        let redactBaseCanvas = null;
+
+        // Repinta a partir de uma cópia já renderizada da página. Sem isso,
+        // cada movimento do dedo re-renderizava o PDF inteiro e travava.
+        function repaintRedact() {
+            const canvas = document.getElementById('redact-canvas');
+            if (!canvas || !redactBaseCanvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(redactBaseCanvas, 0, 0);
+            ctx.fillStyle = '#000000';
+            redactState.boxes.filter(b => b.page === redactState.pageNum).forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+            if (redactState.preview) {
+                const p = redactState.preview;
+                ctx.save();
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                ctx.strokeStyle = '#e5322d'; ctx.lineWidth = 2;
+                ctx.strokeRect(p.x, p.y, p.w, p.h);
+                ctx.restore();
+            }
+            const cnt = document.getElementById('redact-count');
+            if (cnt) cnt.textContent = redactState.boxes.length;
+        }
+
+        async function renderRedactCanvas() {
+            const canvas = document.getElementById('redact-canvas');
+            if (!canvas || !loadedPdfDoc) return;
+            const page = await loadedPdfDoc.getPage(redactState.pageNum);
+            const vp = page.getViewport({ scale: 1.15 });
+            canvas.width = vp.width; canvas.height = vp.height;
+
+            redactBaseCanvas = document.createElement('canvas');
+            redactBaseCanvas.width = vp.width; redactBaseCanvas.height = vp.height;
+            const bctx = redactBaseCanvas.getContext('2d');
+            bctx.fillStyle = '#ffffff'; bctx.fillRect(0, 0, vp.width, vp.height);
+            await page.render({ canvasContext: bctx, viewport: vp }).promise;
+            repaintRedact();
+
+            // Mouse, dedo e caneta com o mesmo código.
+            attachDrag(canvas, {
+                start: (p) => { redactState.drawing = true; redactState.startX = p.x; redactState.startY = p.y; },
+                move: (p) => {
+                    if (!redactState.drawing) return;
+                    redactState.preview = {
+                        x: Math.min(redactState.startX, p.x), y: Math.min(redactState.startY, p.y),
+                        w: Math.abs(p.x - redactState.startX), h: Math.abs(p.y - redactState.startY)
+                    };
+                    repaintRedact();
+                },
+                end: (p) => {
+                    if (!redactState.drawing) return;
+                    redactState.drawing = false;
+                    redactState.preview = null;
+                    const w = p.x - redactState.startX, h = p.y - redactState.startY;
+                    if (Math.abs(w) > 5 && Math.abs(h) > 5) {
+                        redactState.boxes.push({
+                            page: redactState.pageNum,
+                            x: Math.min(redactState.startX, p.x), y: Math.min(redactState.startY, p.y),
+                            w: Math.abs(w), h: Math.abs(h),
+                            canvasW: canvas.width, canvasH: canvas.height
+                        });
+                    }
+                    repaintRedact();
+                    renderRightSidebarControls();
+                }
+            });
+        }
+
+        function changeRedactPage(d) {
+            redactState.pageNum = Math.max(1, Math.min(totalPdfPages, redactState.pageNum + d));
+            renderRightSidebarControls(); renderRedactCanvas();
+        }
+        function undoRedact() { redactState.boxes.pop(); repaintRedact(); renderRightSidebarControls(); }
+        function clearRedact() { redactState.boxes = []; repaintRedact(); renderRightSidebarControls(); }
+
+        async function runApplyRedactionsPDF() {
+            if (!redactState.boxes.length) { throw new Error('Nenhuma tarja foi desenhada. Arraste sobre a folha para marcar o que deve ser ocultado.'); }
+            const { PDFDocument } = PDFLib;
+            const rawBytes = await selectedFiles[0].arrayBuffer();
+            const srcPdf = await PDFDocument.load(rawBytes);
+            const outPdf = await PDFDocument.create();
+            const pdfJsDoc = loadedPdfDoc || await pdfjsLib.getDocument({ data: rawBytes }).promise;
+
+            for (let pNum = 1; pNum <= pdfJsDoc.numPages; pNum++) {
+                const pageBoxes = redactState.boxes.filter(b => b.page === pNum);
+                if (pageBoxes.length > 0) {
+                    setProgress(Math.round((pNum / pdfJsDoc.numPages) * 90), 'Queimando tarja irreversível na página ' + pNum + '...');
+                    const page = await pdfJsDoc.getPage(pNum);
+                    const vp = page.getViewport({ scale: 2.0 });
+                    const c = document.createElement('canvas');
+                    c.width = vp.width; c.height = vp.height;
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+                    ctx.fillStyle = '#000000';
+                    pageBoxes.forEach(b => {
+                        const sX = c.width / b.canvasW, sY = c.height / b.canvasH;
+                        ctx.fillRect(b.x * sX, b.y * sY, b.w * sX, b.h * sY);
+                    });
+
+                    const jpgImg = await outPdf.embedJpg(c.toDataURL('image/jpeg', 0.92));
+                    const origSize = srcPdf.getPage(pNum - 1).getSize();
+                    const newPage = outPdf.addPage([origSize.width, origSize.height]);
+                    newPage.drawImage(jpgImg, { x:0, y:0, width:origSize.width, height:origSize.height });
+                } else {
+                    const [copied] = await outPdf.copyPages(srcPdf, [pNum - 1]);
+                    outPdf.addPage(copied);
+                }
+            }
+            scrubMetadata(outPdf);
+            downloadBlobWithStats(new Blob([await outPdf.save({ useObjectStreams:true })], { type:'application/pdf' }), 'VJ_PDF_Tarjado_Irreversivel.pdf');
+        }
+
+        function scrubMetadata(pdf) {
+            try {
+                pdf.setTitle(''); pdf.setAuthor(''); pdf.setSubject('');
+                pdf.setCreator('VJ Converter'); pdf.setProducer('VJ Converter');
+                pdf.setKeywords([]);
+            } catch (e) {}
+        }
+
+        /* ==================== SUMÁRIO CLICÁVEL (SEM LIMITE) ==================== */
+        // Monta N páginas de sumário no início do documento, com links reais.
+        async function buildTocPages(pdfDoc, entries, title, contentPages) {
+            const { StandardFonts, rgb, PDFName, PDFArray } = PDFLib;
+            const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+            const fontReg = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const PER_PAGE = 22;
+            const tocCount = Math.max(1, Math.ceil(entries.length / PER_PAGE));
+            const tocPages = [];
+            for (let i = 0; i < tocCount; i++) tocPages.push(pdfDoc.insertPage(i, [595.28, 841.89]));
+
+            entries.forEach((e, idx) => {
+                const pageIdx = Math.floor(idx / PER_PAGE);
+                const row = idx % PER_PAGE;
+                const page = tocPages[pageIdx];
+                const { width, height } = page.getSize();
+                if (row === 0) {
+                    page.drawRectangle({ x:0, y:height - 80, width, height:80, color:rgb(0.12, 0.16, 0.23) });
+                    page.drawText(toWinAnsi(title).slice(0, 48), { x:45, y:height - 48, size:15, font:fontBold, color:rgb(1, 1, 1) });
+                    if (tocCount > 1) {
+                        page.drawText('Sumario ' + (pageIdx + 1) + ' de ' + tocCount, { x:width - 150, y:height - 48, size:9, font:fontReg, color:rgb(1, 1, 1) });
+                    }
+                }
+                const y = height - 120 - (row * 28);
+                const destPageNumber = tocCount + e.startIdx + 1;
+                page.drawText(toWinAnsi(e.title).slice(0, 58), { x:45, y, size:10.5, font:fontBold, color:rgb(0.1, 0.2, 0.45) });
+                page.drawText('Pag. ' + destPageNumber, { x:width - 100, y, size:10, font:fontReg });
+                const target = contentPages[e.startIdx];
+                if (target) {
+                    const annot = pdfDoc.context.obj({
+                        Type:'Annot', Subtype:'Link',
+                        Rect:[40, y - 5, width - 40, y + 15],
+                        Border:[0, 0, 0],
+                        Dest:[target.ref, 'XYZ', null, null, null]
+                    });
+                    let annots = page.node.lookup(PDFName.of('Annots'), PDFArray);
+                    if (!annots) { annots = pdfDoc.context.obj([]); page.node.set(PDFName.of('Annots'), annots); }
+                    annots.push(pdfDoc.context.register(annot));
+                }
+            });
+            return tocCount;
+        }
+
+        async function runMergeAndTocPDF() {
+            const { PDFDocument } = PDFLib;
+            const generateToc = (document.getElementById('merge-generate-toc') || {}).checked !== false;
+            const tocTitle = (document.getElementById('toc-main-title') || {}).value || 'SUMÁRIO DE DOCUMENTOS';
+            const finalPdf = await PDFDocument.create();
+            const entries = [];
+            const contentPages = [];
+            let offset = 0;
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                setProgress(Math.round(((i + 1) / selectedFiles.length) * 70), 'Juntando ' + (i + 1) + '/' + selectedFiles.length + '...');
+                const pdf = await PDFDocument.load(await selectedFiles[i].arrayBuffer(), { ignoreEncryption: true });
+                entries.push({ title: (i + 1) + '. ' + selectedFiles[i].name.replace(/\.pdf$/i, ''), startIdx: offset });
+                offset += pdf.getPageCount();
+                (await finalPdf.copyPages(pdf, pdf.getPageIndices())).forEach(p => { finalPdf.addPage(p); contentPages.push(p); });
+            }
+            if (generateToc && entries.length) {
+                setProgress(85, 'Gerando sumário clicável...');
+                await buildTocPages(finalPdf, entries, tocTitle, contentPages);
+            }
+            downloadBlobWithStats(new Blob([await finalPdf.save()], { type:'application/pdf' }), 'VJ_PDF_Mesclado.pdf');
+        }
+
+        /* ==================== FLUXO 1-CLIQUE ==================== */
+        async function runOneClickWorkflow() {
+            const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+            const pdf = await PDFDocument.create();
+            const entries = [];
+            const contentPages = [];
+            let offset = 0;
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                setProgress(Math.round(((i + 1) / selectedFiles.length) * 45), 'Juntando ' + (i + 1) + '/' + selectedFiles.length + '...');
+                const src = await PDFDocument.load(await selectedFiles[i].arrayBuffer(), { ignoreEncryption: true });
+                entries.push({ title: (i + 1) + '. ' + selectedFiles[i].name.replace(/\.pdf$/i, ''), startIdx: offset });
+                offset += src.getPageCount();
+                (await pdf.copyPages(src, src.getPageIndices())).forEach(p => { pdf.addPage(p); contentPages.push(p); });
+            }
+
+            if (workflowSteps.mergeToc && entries.length) {
+                setProgress(55, 'Gerando sumário clicável...');
+                // Agora o sumário do fluxo também sai com links clicáveis de verdade.
+                await buildTocPages(pdf, entries, 'SUMÁRIO AUTOMÁTICO DO FLUXO DE TRABALHO', contentPages);
+            }
+
+            let currentBytes = await pdf.save({ useObjectStreams: !!workflowSteps.compressVector });
+            if (workflowSteps.normalizeA4) {
+                setProgress(70, 'Padronizando folhas em A4...');
+                const normBlob = await normalizePdfToA4Blob(new File([currentBytes], 'temp.pdf'));
+                currentBytes = await normBlob.arrayBuffer();
+            }
+
+            setProgress(85, 'Numerando e finalizando...');
+            const finalDoc = await PDFDocument.load(currentBytes);
+            const fBold = await finalDoc.embedFont(StandardFonts.HelveticaBold);
+            const pages = finalDoc.getPages();
+            const wmText = toWinAnsi(workflowSteps.watermarkText);
+            pages.forEach((p, idx) => {
+                const size = p.getSize();
+                if (workflowSteps.pageNumbers) {
+                    p.drawText('Fls. ' + (idx + 1) + ' / ' + pages.length, { x:size.width - 95, y:20, size:9.5, font:fBold, color:rgb(0.25, 0.25, 0.25) });
+                }
+                if (workflowSteps.watermark && wmText) {
+                    p.drawText(wmText, { x:Math.max(20, size.width * 0.18), y:size.height * 0.38, size:34, font:fBold, color:rgb(0.85, 0.15, 0.15), opacity:0.22, rotate:degrees(35) });
+                }
+            });
+            if (workflowSteps.compressVector) scrubMetadata(finalDoc);
+            downloadBlobWithStats(new Blob([await finalDoc.save({ useObjectStreams: !!workflowSteps.compressVector })], { type:'application/pdf' }), 'VJ_Fluxo_Completo.pdf');
+        }
+
+        /* ==================== CONVERSORES ==================== */
+        async function convertSinglePdfToDocxBlob(file) {
+            const useOcr = (wordOcrMode === 'ocr');
+            const smartMerge = (document.getElementById('word-smart-merge') || {}).checked !== false;
+            const abntMode = (document.getElementById('word-abnt-quotes') || {}).checked !== false;
+            const pages = await extractRichLinesFromPDF(file, useOcr);
+
+            if (window.docx) {
+                const { Document, Packer, Paragraph, TextRun, AlignmentType } = window.docx;
+                const docChildren = [];
+                pages.forEach((p, pIdx) => {
+                    const minXs = p.lines.map(l => l.minX).sort((a, b) => a - b);
+                    const baseLeft = minXs.length ? minXs[Math.floor(minXs.length * 0.15)] : 50;
+                    const paras = []; let cur = null;
+                    p.lines.forEach(line => {
+                        const isHeading = line.maxHeight > 14.5;
+                        const isLegal = /^(Art\.|Artigo|§\s*\d+|Parágrafo único)/i.test(line.fullText);
+                        const isQuote = abntMode && (line.minX - baseLeft > 55) && line.fullText.length > 35;
+                        const endsTerm = cur ? /[.!?:;”"'\])]$/.test(cur.raw.trim()) : true;
+                        if (smartMerge && cur && !isHeading && !cur.isHeading && !isLegal && (cur.isQuote === isQuote) && !endsTerm) {
+                            cur.raw += ' ' + line.fullText; cur.bold = cur.bold || line.bold;
+                        } else {
+                            if (cur) paras.push(cur);
+                            cur = { raw:line.fullText, isHeading, isQuote, bold:line.bold || isLegal };
+                        }
+                    });
+                    if (cur) paras.push(cur);
+                    paras.forEach((para, idx) => {
+                        docChildren.push(new Paragraph({
+                            alignment: para.isHeading ? AlignmentType.LEFT : AlignmentType.JUSTIFIED,
+                            indent: para.isQuote ? { left:2268 } : (para.isHeading ? undefined : { firstLine:709 }),
+                            spacing: { after:160, line:para.isQuote ? 240 : 360 },
+                            pageBreakBefore: (pIdx > 0 && idx === 0),
+                            children: [new TextRun({ text:para.raw, bold:para.isHeading || para.bold, size:para.isHeading ? 26 : (para.isQuote ? 20 : 24), font:'Times New Roman' })]
+                        }));
+                    });
+                });
+                if (!docChildren.length) throw new Error('Não encontrei texto neste PDF. Se ele for digitalizado, marque a opção ROC (OCR).');
+                return await Packer.toBlob(new Document({ sections:[{ properties:{ page:{ margin:{ top:1701, left:1701, bottom:1134, right:1134 } } }, children:docChildren }] }));
+            }
+            const body = pages.map(p => p.lines.map(l => '<p>' + escapeHtml(l.fullText) + '</p>').join('')).join('<hr>');
+            return new Blob(['﻿', body], { type:'application/msword' });
+        }
+
+        function parseCellTypedValue(str) {
+            const clean = String(str).replace(/^R\$\s*/i, '').trim();
+            if (/^-?\d{1,3}(\.\d{3})+,\d{2}$/.test(clean)) return parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+            if (/^-?\d+,\d{2}$/.test(clean)) return parseFloat(clean.replace(',', '.'));
+            return str;
+        }
+
+        async function convertSinglePdfToXlsxBlob(file) {
+            const useOcr = (excelState.ocr === 'ocr');
+            const pages = await extractRichLinesFromPDF(file, useOcr);
+            const wb = XLSX.utils.book_new();
+            if (excelState.layout === 'single') {
+                const allRows = [];
+                pages.forEach(p => {
+                    allRows.push(['--- PÁGINA ' + p.pageNumber + ' ---']);
+                    p.lines.forEach(l => allRows.push((l.cells.length > 1 ? l.cells : [l.fullText]).map(parseCellTypedValue)));
+                });
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(allRows.length ? allRows : [['Vazio']]), 'Planilha_Unica');
+            } else {
+                pages.forEach(p => {
+                    const rows = p.lines.map(l => (l.cells.length > 1 ? l.cells : [l.fullText]).map(parseCellTypedValue));
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows.length ? rows : [['Vazio']]), 'Pag_' + p.pageNumber);
+                });
+            }
+            const out = XLSX.write(wb, { type:'array', bookType:'xlsx' });
+            return new Blob([out], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        }
+
+        async function convertSinglePdfToPptxBlob(file) {
+            const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+            try {
+                const pptx = new PptxGenJS();
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    setProgress(Math.round((i / pdf.numPages) * 85), 'Slide ' + i + '/' + pdf.numPages + '...');
+                    const page = await pdf.getPage(i);
+                    const vp = page.getViewport({ scale: 1.5 });
+                    const c = document.createElement('canvas');
+                    c.width = vp.width; c.height = vp.height;
+                    await page.render({ canvasContext:c.getContext('2d'), viewport:vp }).promise;
+                    pptx.addSlide().addImage({ data:c.toDataURL('image/jpeg', 0.88), x:0, y:0, w:'100%', h:'100%' });
+                }
+                return await pptx.write({ outputType: 'blob' });
+            } finally {
+                if (pdf.destroy) { try { pdf.destroy(); } catch (e) {} }
+            }
+        }
+
+        // O html2canvas precisa que o elemento exista no documento para medir o
+        // layout. Fora da página, a conversão saía em branco. Aqui ele é anexado
+        // fora da área visível, renderizado e removido em seguida.
+        async function renderHtmlToPdfBlob(innerHtml) {
+            const holder = document.createElement('div');
+            holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;background:#fff;color:#000;padding:25px;z-index:-1;';
+            holder.innerHTML = innerHtml;
+            document.body.appendChild(holder);
+            try {
+                return await html2pdf()
+                    .set({ margin:12, html2canvas:{ scale:2, backgroundColor:'#ffffff' }, jsPDF:{ unit:'mm', format:'a4' } })
+                    .from(holder).outputPdf('blob');
+            } finally {
+                document.body.removeChild(holder);
+            }
+        }
+
+        async function convertSingleDocxToPdfBlob(file) {
+            const res = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+            if (!res.value || !res.value.trim()) throw new Error('Este .docx não tem conteúdo de texto que eu consiga ler.');
+            return await renderHtmlToPdfBlob(res.value);
+        }
+
+        /* ==================== COMPRESSÃO ==================== */
+        async function compressSinglePdfBlob(file) {
+            if (compressMode === 'vector') {
+                const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+                scrubMetadata(pdf);
+                return new Blob([await pdf.save({ useObjectStreams:true })], { type:'application/pdf' });
+            }
+            const q = parseFloat(compressMode);
+            const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+            try {
+                const out = await PDFLib.PDFDocument.create();
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    setProgress(Math.round((i / pdf.numPages) * 85), 'Comprimindo página ' + i + '/' + pdf.numPages + '...');
+                    const page = await pdf.getPage(i);
+                    const vp = page.getViewport({ scale: q === 0.40 ? 1.0 : 1.3 });
+                    const c = document.createElement('canvas');
+                    c.width = vp.width; c.height = vp.height;
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                    await page.render({ canvasContext:ctx, viewport:vp }).promise;
+                    const img = await out.embedJpg(c.toDataURL('image/jpeg', q));
+                    out.addPage([vp.width, vp.height]).drawImage(img, { x:0, y:0, width:vp.width, height:vp.height });
+                }
+                scrubMetadata(out);
+                return new Blob([await out.save({ useObjectStreams:true })], { type:'application/pdf' });
+            } finally {
+                if (pdf.destroy) { try { pdf.destroy(); } catch (e) {} }
+            }
+        }
+
+        /* ====================================================================
+           COMPRIMIR PDF ATÉ UM PESO MÁXIMO
+           Rasterizar um PDF inteiro é caro, então não dá para fazer busca
+           binária como na imagem: cada tentativa reconstrói o documento todo.
+           A estratégia aqui é determinística e no máximo 7 tentativas:
+           primeiro o modo vetorial (barato e preserva o Ctrl+F) e, se não
+           couber, níveis decrescentes de resolução e qualidade, parando no
+           primeiro que couber de verdade — medido, não estimado.
+        ==================================================================== */
+        const RASTER_TIERS = [
+            { scale:1.4, q:0.78, label:'alta' },
+            { scale:1.25, q:0.65, label:'boa' },
+            { scale:1.05, q:0.55, label:'média' },
+            { scale:0.9,  q:0.45, label:'reduzida' },
+            { scale:0.75, q:0.38, label:'baixa' },
+            { scale:0.6,  q:0.32, label:'mínima' }
+        ];
+
+        async function rasterizePdfBlob(file, scale, quality, onPage) {
+            const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+            try {
+                const out = await PDFLib.PDFDocument.create();
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    if (onPage) onPage(i, pdf.numPages);
+                    const page = await pdf.getPage(i);
+                    const vp = page.getViewport({ scale });
+                    const c = document.createElement('canvas');
+                    c.width = Math.max(1, Math.round(vp.width));
+                    c.height = Math.max(1, Math.round(vp.height));
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                    await page.render({ canvasContext:ctx, viewport:vp }).promise;
+                    const img = await out.embedJpg(c.toDataURL('image/jpeg', quality));
+                    // A página mantém o tamanho original em pontos; só os pixels mudam.
+                    const pt = page.getViewport({ scale: 1 });
+                    out.addPage([pt.width, pt.height]).drawImage(img, { x:0, y:0, width:pt.width, height:pt.height });
+                }
+                scrubMetadata(out);
+                return new Blob([await out.save({ useObjectStreams:true })], { type:'application/pdf' });
+            } finally {
+                if (pdf.destroy) { try { pdf.destroy(); } catch (e) {} }
+            }
+        }
+
+        async function compressPdfToTargetBlob(file) {
+            const targetBytes = Math.max(0.2, parseFloat(pdfTargetMB) || 10) * 1024 * 1024;
+            const nome = file.name;
+
+            // 1) O arquivo já cabe? Nem vale recomprimir.
+            if (file.size <= targetBytes) {
+                setProgress(50, nome + ': já está dentro do limite, só limpando metadados...');
+                const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption:true });
+                scrubMetadata(pdf);
+                const blob = new Blob([await pdf.save({ useObjectStreams:true })], { type:'application/pdf' });
+                if (blob.size <= targetBytes) return blob;
+            }
+
+            // 2) Otimização vetorial: preserva o texto selecionável.
+            setProgress(20, nome + ': tentando a otimização vetorial (mantém o Ctrl+F)...');
+            const vecPdf = await PDFLib.PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption:true });
+            scrubMetadata(vecPdf);
+            const vecBlob = new Blob([await vecPdf.save({ useObjectStreams:true })], { type:'application/pdf' });
+            if (vecBlob.size <= targetBytes) return vecBlob;
+
+            // 3) Rasterização em níveis decrescentes, medindo cada resultado.
+            let ultimo = vecBlob;
+            for (let i = 0; i < RASTER_TIERS.length; i++) {
+                const t = RASTER_TIERS[i];
+                const base = 25 + Math.round((i / RASTER_TIERS.length) * 65);
+                const blob = await rasterizePdfBlob(file, t.scale, t.q, (p, total) => {
+                    setProgress(base, nome + ': tentativa ' + (i + 1) + ' de ' + RASTER_TIERS.length +
+                        ' (qualidade ' + t.label + ') — página ' + p + '/' + total);
+                });
+                ultimo = blob;
+                if (blob.size <= targetBytes) return blob;
+            }
+
+            pdfTargetFailures.push(nome + ' (menor possível: ' + (ultimo.size / (1024 * 1024)).toFixed(2) + ' MB)');
+            return ultimo;
+        }
+
+        function reportPdfTargetFailures() {
+            if (!pdfTargetFailures.length) return;
+            alert('Não consegui chegar a ' + pdfTargetMB + ' MB nestes arquivos, mesmo na qualidade mínima:' + NL + NL +
+                pdfTargetFailures.join(NL) + NL + NL +
+                'Eles foram salvos no menor tamanho que deu. Para reduzir mais, divida o PDF em partes (ferramenta Dividir, aba Tamanho) e envie em pedaços.');
+            pdfTargetFailures = [];
+        }
+
+        /* ==================== ASSINAR / RECORTAR / SANITIZAR ==================== */
+        /* ==================== QUADRO DE ASSINATURA ==================== */
+        function redrawSignPad() {
+            const pad = document.getElementById('sign-pad');
+            if (!pad) return;
+            const ctx = pad.getContext('2d');
+            if (!ctx) return;
+            ctx.clearRect(0, 0, pad.width, pad.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pad.width, pad.height);
+            // Linha de apoio, como a de um recibo.
+            ctx.save();
+            ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1; ctx.setLineDash([6, 5]);
+            ctx.beginPath(); ctx.moveTo(30, pad.height - 60); ctx.lineTo(pad.width - 30, pad.height - 60); ctx.stroke();
+            ctx.restore();
+
+            ctx.strokeStyle = '#111827';
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            signState.paths.forEach(p => {
+                if (p.length < 2) return;
+                ctx.lineWidth = 3.2;
+                ctx.beginPath();
+                ctx.moveTo(p[0].x, p[0].y);
+                for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
+                ctx.stroke();
+            });
+        }
+
+        // Recorta o espaço em branco em volta do traço e devolve um PNG
+        // transparente, para a assinatura não virar um retângulo branco no PDF.
+        function buildSignatureDataUrl() {
+            if (!signState.paths.length) return null;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            signState.paths.forEach(p => p.forEach(pt => {
+                if (pt.x < minX) minX = pt.x;
+                if (pt.y < minY) minY = pt.y;
+                if (pt.x > maxX) maxX = pt.x;
+                if (pt.y > maxY) maxY = pt.y;
+            }));
+            const pad = 14;
+            minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+            maxX = maxX + pad; maxY = maxY + pad;
+            const w = Math.max(10, Math.round(maxX - minX)), h = Math.max(10, Math.round(maxY - minY));
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            if (!ctx) return null;
+            ctx.strokeStyle = '#111827';
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 3.2;
+            signState.paths.forEach(p => {
+                if (p.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(p[0].x - minX, p[0].y - minY);
+                for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x - minX, p[i].y - minY);
+                ctx.stroke();
+            });
+            return c.toDataURL('image/png');
+        }
+
+        function initSignPad() {
+            const pad = document.getElementById('sign-pad');
+            if (!pad) return;
+            redrawSignPad();
+            attachDrag(pad, {
+                start: (p) => { signState.paths.push([{ x:p.x, y:p.y }]); },
+                move: (p) => {
+                    const cur = signState.paths[signState.paths.length - 1];
+                    if (!cur) return;
+                    cur.push({ x:p.x, y:p.y });
+                    redrawSignPad();
+                },
+                end: () => { signState.dataUrl = buildSignatureDataUrl(); }
+            });
+        }
+
+        async function runSignPDF() {
+            const { PDFDocument, StandardFonts, rgb } = PDFLib;
+            const pos = (document.getElementById('sign-pos') || {}).value || 'bottom-right';
+            const firstOnly = (document.getElementById('sign-first-only') || {}).checked;
+            const pdf = await PDFDocument.load(await selectedFiles[0].arrayBuffer(), { ignoreEncryption: true });
+            const pages = pdf.getPages();
+
+            if (signState.mode === 'draw') {
+                const dataUrl = signState.dataUrl || buildSignatureDataUrl();
+                if (!dataUrl) throw new Error('O quadro de assinatura está vazio. Desenhe a sua rubrica antes de salvar.');
+                const png = await pdf.embedPng(dataUrl);
+                const w = Math.max(60, parseInt(signState.width, 10) || 180);
+                const h = w * (png.height / png.width);
+                pages.forEach((p, idx) => {
+                    if (firstOnly && idx > 0) return;
+                    const size = p.getSize();
+                    let x = size.width - w - 40, y = 36;
+                    if (pos === 'bottom-center') { x = (size.width - w) / 2; y = 40; }
+                    if (pos === 'top-right') { x = size.width - w - 40; y = size.height - h - 36; }
+                    p.drawImage(png, { x, y, width:w, height:h });
+                });
+            } else {
+                const text = toWinAnsi((document.getElementById('sign-text-input') || {}).value || 'Assinado Digitalmente');
+                const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+                pages.forEach((p, idx) => {
+                    if (firstOnly && idx > 0) return;
+                    const { width, height } = p.getSize();
+                    let x = width - 230, y = 35;
+                    if (pos === 'bottom-center') { x = width / 2 - 110; y = 40; }
+                    if (pos === 'top-right') { x = width - 230; y = height - 40; }
+                    p.drawRectangle({ x:x - 8, y:y - 6, width:220, height:24, borderColor:rgb(0.1, 0.25, 0.6), borderWidth:1.2, color:rgb(0.95, 0.97, 1) });
+                    p.drawText(text.slice(0, 38), { x, y:y + 2, size:9, font, color:rgb(0.1, 0.25, 0.6) });
+                });
+            }
+            downloadBlobWithStats(new Blob([await pdf.save()], { type:'application/pdf' }), 'VJ_PDF_Assinado.pdf');
+        }
+
+        async function cropSinglePdfBlob(file) {
+            const num = (id, d) => { const v = parseFloat((document.getElementById(id) || {}).value); return isNaN(v) ? d : v; };
+            const top = num('crop-top', 20), bottom = num('crop-bottom', 20), left = num('crop-left', 20), right = num('crop-right', 20);
+            const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+            pdf.getPages().forEach(p => {
+                const { width, height } = p.getSize();
+                const box = p.getCropBox ? p.getCropBox() : { x:0, y:0, width, height };
+                const newW = Math.max(50, box.width - left - right);
+                const newH = Math.max(50, box.height - top - bottom);
+                p.setCropBox(box.x + left, box.y + bottom, newW, newH);
+            });
+            return new Blob([await pdf.save()], { type:'application/pdf' });
+        }
+
+        async function unlockAndSanitizePdfBlob(file) {
+            const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption:true });
+            scrubMetadata(pdf);
+            return new Blob([await pdf.save({ useObjectStreams:true })], { type:'application/pdf' });
+        }
+
+        /* ==================== LOTE ==================== */
+        async function runBatch(fn, suffix) {
+            if (selectedFiles.length === 1) {
+                const blob = await fn(selectedFiles[0]);
+                downloadBlobWithStats(blob, selectedFiles[0].name.replace(/\.[^.]+$/, '') + suffix);
+            } else {
+                const zip = new JSZip();
+                const falhas = [];
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    setProgress(Math.round(((i + 1) / selectedFiles.length) * 90), 'Lote ' + (i + 1) + '/' + selectedFiles.length + '...');
+                    try {
+                        zip.file(selectedFiles[i].name.replace(/\.[^.]+$/, '') + suffix, await fn(selectedFiles[i]));
+                    } catch (err) {
+                        // Um arquivo problemático não derruba mais o lote inteiro.
+                        falhas.push(selectedFiles[i].name + ': ' + err.message);
+                    }
+                }
+                if (falhas.length) zip.file('_ARQUIVOS_COM_ERRO.txt', 'Estes arquivos não puderam ser processados:' + NL + NL + falhas.join(NL));
+                downloadBlobWithStats(await zip.generateAsync({ type:'blob' }), 'VJ_Lote_' + selectedFiles.length + '.zip');
+                if (falhas.length) alert(falhas.length + ' arquivo(s) não puderam ser processados. A lista está dentro do .zip, em _ARQUIVOS_COM_ERRO.txt.');
+            }
+        }
+
+        /* ==================== EXTRAÇÃO DE TEXTO ==================== */
+        async function extractRichLinesFromPDF(file, forceOcr = false) {
+            const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+            const pagesData = [];
+            try {
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const tc = await page.getTextContent();
+                    if (forceOcr || tc.items.length === 0) {
+                        if (!window.Tesseract) throw new Error('O motor de OCR não carregou. Verifique sua conexão e recarregue a página.');
+                        setProgress(Math.round((i / pdf.numPages) * 85), 'ROC (OCR) na página ' + i + '/' + pdf.numPages + '...');
+                        const vp = page.getViewport({ scale:1.7 });
+                        const c = document.createElement('canvas');
+                        c.width = vp.width; c.height = vp.height;
+                        const cx = c.getContext('2d');
+                        cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, c.width, c.height);
+                        await page.render({ canvasContext:cx, viewport:vp }).promise;
+                        const result = await Tesseract.recognize(c, 'por');
+                        const text = result.data.text;
+                        const lines = text.split(NL).map(t => t.trim()).filter(Boolean).map(t => ({ minX:50, cells:t.split(/\s{2,}/), fullText:t, bold:false, maxHeight:11 }));
+                        pagesData.push({ pageNumber:i, lines });
+                        continue;
+                    }
+                    const styles = tc.styles || {};
+                    const rowsMap = new Map();
+                    tc.items.forEach(item => {
+                        if (!item.str || !item.str.trim()) return;
+                        const y = Math.round(item.transform[5] / 4) * 4;
+                        if (!rowsMap.has(y)) rowsMap.set(y, []);
+                        const fName = (item.fontName + ' ' + ((styles[item.fontName] || {}).fontFamily || '')).toLowerCase();
+                        rowsMap.get(y).push({ x:item.transform[4], text:item.str, height:item.height || Math.abs(item.transform[0]) || 11, bold:fName.indexOf('bold') >= 0 || fName.indexOf('black') >= 0 });
+                    });
+                    const sortedY = Array.from(rowsMap.keys()).sort((a, b) => b - a);
+                    const lines = sortedY.map(y => {
+                        const row = rowsMap.get(y).sort((a, b) => a.x - b.x);
+                        return {
+                            minX:row[0].x,
+                            cells:row.map(r => r.text.trim()).filter(Boolean),
+                            fullText:row.map(r => r.text).join(' ').replace(/\s+/g, ' ').trim(),
+                            bold:row.some(r => r.bold),
+                            maxHeight:Math.max.apply(null, row.map(r => r.height))
+                        };
+                    }).filter(l => l.fullText.length > 0);
+                    pagesData.push({ pageNumber:i, lines });
+                }
+            } finally {
+                if (pdf.destroy) { try { pdf.destroy(); } catch (e) {} }
+            }
+            return pagesData;
+        }
+
+        /* ====================================================================
+           DIVIDIR — AGORA COM PESAGEM REAL DE CADA PARTE
+           Antes: estimava quantas partes caberiam e cortava em blocos iguais,
+           sem nunca medir o resultado. Um PDF com páginas de pesos diferentes
+           gerava partes acima do limite e o e-Proc recusava o upload.
+        ==================================================================== */
+        async function buildPartBytes(srcPdf, indices) {
+            const { PDFDocument } = PDFLib;
+            const doc = await PDFDocument.create();
+            (await doc.copyPages(srcPdf, indices)).forEach(p => doc.addPage(p));
+            return await doc.save({ useObjectStreams:true });
+        }
+
+        async function groupPagesByRealSize(srcPdf, maxMB) {
+            const limit = maxMB * 1024 * 1024;
+            const total = srcPdf.getPageCount();
+            const groups = [];
+            let current = [];
+            let currentBytes = 0;
+            const oversize = [];
+
+            for (let i = 0; i < total; i++) {
+                setProgress(Math.round((i / total) * 80), 'Pesando página ' + (i + 1) + '/' + total + '...');
+                const candidate = current.concat([i]);
+                const bytes = (await buildPartBytes(srcPdf, candidate)).length;
+                if (bytes > limit && current.length > 0) {
+                    groups.push({ pages: current, bytes: currentBytes });
+                    const soloBytes = (await buildPartBytes(srcPdf, [i])).length;
+                    current = [i];
+                    currentBytes = soloBytes;
+                    if (soloBytes > limit) oversize.push(i + 1);
+                } else {
+                    current = candidate;
+                    currentBytes = bytes;
+                    if (current.length === 1 && bytes > limit) oversize.push(i + 1);
+                }
+            }
+            if (current.length) groups.push({ pages: current, bytes: currentBytes });
+            return { groups, oversize };
+        }
+
+        async function runAdvancedSplitPDF() {
+            const { PDFDocument } = PDFLib;
+            const file = selectedFiles[0];
+            const srcPdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+            const total = srcPdf.getPageCount();
+            let groups = [];
+            let oversizeWarning = [];
+
+            if (splitState.tab === 'pages') {
+                for (let i = 0; i < total; i++) groups.push([i]);
+            } else if (splitState.tab === 'size') {
+                const res = await groupPagesByRealSize(srcPdf, Math.max(0.3, splitState.maxSizeMB));
+                groups = res.groups.map(g => g.pages);
+                oversizeWarning = res.oversize;
+            } else if (splitState.mode === 'fixed') {
+                const step = Math.max(1, splitState.fixedStep);
+                for (let i = 0; i < total; i += step) {
+                    const chunk = [];
+                    for (let j = i; j < Math.min(total, i + step); j++) chunk.push(j);
+                    groups.push(chunk);
+                }
+            } else {
+                splitState.intervals.forEach(intv => {
+                    const chunk = [];
+                    for (let p = intv.from; p <= intv.to; p++) if (p >= 1 && p <= total) chunk.push(p - 1);
+                    if (chunk.length) groups.push(chunk);
+                });
+            }
+
+            if (!groups.length) throw new Error('Nenhum intervalo válido foi definido.');
+
+            if ((splitState.tab === 'range' && splitState.mode === 'custom' && splitState.mergeIntervals) || groups.length === 1) {
+                const merged = await PDFDocument.create();
+                for (const g of groups) (await merged.copyPages(srcPdf, g)).forEach(p => merged.addPage(p));
+                downloadBlobWithStats(new Blob([await merged.save()], { type:'application/pdf' }), 'VJ_PDF_Dividido.pdf');
+            } else {
+                const zip = new JSZip();
+                for (let i = 0; i < groups.length; i++) {
+                    setProgress(80 + Math.round(((i + 1) / groups.length) * 18), 'Gerando parte ' + (i + 1) + '/' + groups.length + '...');
+                    const bytes = await buildPartBytes(srcPdf, groups[i]);
+                    const first = groups[i][0] + 1, last = groups[i][groups[i].length - 1] + 1;
+                    const mb = (bytes.length / (1024 * 1024)).toFixed(2);
+                    zip.file('Parte_' + String(i + 1).padStart(2, '0') + '_pag_' + first + '-' + last + '_' + mb + 'MB.pdf', bytes);
+                }
+                downloadBlobWithStats(await zip.generateAsync({ type:'blob' }), 'VJ_Divididos.zip');
+            }
+
+            if (oversizeWarning.length) {
+                alert('Aviso: as páginas ' + oversizeWarning.join(', ') + ' sozinhas já pesam mais que o limite de ' + splitState.maxSizeMB + ' MB, então ficaram em partes acima do máximo.' + NL + NL + 'Para resolver, comprima o PDF antes de dividir (use o modo Extrema Compressão) e tente de novo.');
+            }
+        }
+
+        /* ==================== A4 / MÍDIAS / JPG ==================== */
+        async function normalizePdfToA4Blob(file) {
+            const { PDFDocument } = PDFLib;
+            const m = 28;
+            const src = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+            const out = await PDFDocument.create();
+            for (const p of src.getPages()) {
+                const { width:sW, height:sH } = p.getSize();
+                const emb = await out.embedPage(p);
+                const page = out.addPage([595.28, 841.89]);
+                const scale = Math.min((595.28 - m * 2) / sW, (841.89 - m * 2) / sH);
+                page.drawPage(emb, { x:(595.28 - sW * scale) / 2, y:(841.89 - sH * scale) / 2, width:sW * scale, height:sH * scale });
+            }
+            return new Blob([await out.save()], { type:'application/pdf' });
+        }
+
+        async function runExtractMediaFromPdfs() {
+            const zip = new JSZip();
+            for (const file of selectedFiles) {
+                const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                try {
+                    for (let p = 1; p <= pdf.numPages; p++) {
+                        setProgress(Math.round((p / pdf.numPages) * 90), 'Extraindo página ' + p + '...');
+                        const page = await pdf.getPage(p);
+                        const vp = page.getViewport({ scale:2.0 });
+                        const c = document.createElement('canvas');
+                        c.width = vp.width; c.height = vp.height;
+                        await page.render({ canvasContext:c.getContext('2d'), viewport:vp }).promise;
+                        zip.file(file.name.replace(/\.pdf$/i, '') + '_Pag_' + p + '.png', await new Promise(r => c.toBlob(r, 'image/png')));
+                    }
+                } finally {
+                    if (pdf.destroy) { try { pdf.destroy(); } catch (e) {} }
+                }
+            }
+            downloadBlobWithStats(await zip.generateAsync({ type:'blob' }), 'VJ_Midias.zip');
+        }
+
+        // Carrega qualquer formato que o navegador saiba abrir (PNG, WEBP, HEIC...)
+        function loadImageElement(file) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Formato de imagem não suportado pelo navegador: ' + file.name)); };
+                img.src = url;
+            });
+        }
+
+        /* ====================================================================
+           FILTRO "SUPER NITIDEZ" — isto é o que o README prometia e não existia.
+           Estima o fundo do papel com uma versão borrada da foto e divide a
+           imagem por esse fundo. Sombra e papel amarelado viram branco; o texto,
+           que é muito mais escuro que o fundo local, permanece.
+        ==================================================================== */
+        function applyScannerFilter(canvas) {
+            const w = canvas.width, h = canvas.height;
+            const ctx = canvas.getContext('2d');
+            const src = ctx.getImageData(0, 0, w, h);
+
+            // 1. Fundo estimado: miniatura borrada reamplificada.
+            const small = document.createElement('canvas');
+            const sw = Math.max(1, Math.round(w / 16)), sh = Math.max(1, Math.round(h / 16));
+            small.width = sw; small.height = sh;
+            const sctx = small.getContext('2d');
+            sctx.drawImage(canvas, 0, 0, sw, sh);
+
+            const blur = document.createElement('canvas');
+            blur.width = w; blur.height = h;
+            const bctx = blur.getContext('2d');
+            bctx.filter = 'blur(6px)';
+            bctx.drawImage(small, 0, 0, w, h);
+            const bg = bctx.getImageData(0, 0, w, h);
+
+            const d = src.data, b = bg.data;
+            for (let i = 0; i < d.length; i += 4) {
+                for (let k = 0; k < 3; k++) {
+                    const base = Math.max(40, b[i + k]);
+                    // Divisão pelo fundo local: normaliza a iluminação da foto.
+                    let v = (d[i + k] / base) * 255;
+                    // Curva de contraste suave para firmar o preto do texto.
+                    v = v < 128 ? (v * v) / 128 : 255 - ((255 - v) * (255 - v)) / 128;
+                    d[i + k] = v > 248 ? 255 : (v < 0 ? 0 : v);
+                }
+            }
+            ctx.putImageData(src, 0, 0);
+        }
+
+        async function runJpgToPDFSuperSharp() {
+            const { PDFDocument } = PDFLib;
+            const pdf = await PDFDocument.create();
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                setProgress(Math.round(((i + 1) / selectedFiles.length) * 90), 'Processando imagem ' + (i + 1) + '/' + selectedFiles.length + '...');
+                const imgEl = await loadImageElement(file);
+                const c = document.createElement('canvas');
+                // Limita a 2400px no maior lado: evita PDFs gigantes de fotos de 50MP.
+                const maxSide = 2400;
+                const scale = Math.min(1, maxSide / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+                c.width = Math.max(1, Math.round(imgEl.naturalWidth * scale));
+                c.height = Math.max(1, Math.round(imgEl.naturalHeight * scale));
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                ctx.drawImage(imgEl, 0, 0, c.width, c.height);
+                if (scannerFilter) applyScannerFilter(c);
+
+                // Sempre reconverte para JPEG: embedJpg só aceita JPEG de verdade,
+                // então PNG/WEBP/HEIC quebravam a ferramenta antes.
+                const dataUrl = c.toDataURL('image/jpeg', 0.92);
+                const img = await pdf.embedJpg(dataUrl);
+                const page = pdf.addPage([595.28, 841.89]);
+                const s = Math.min(555 / img.width, 800 / img.height);
+                page.drawImage(img, { x:(595.28 - img.width * s) / 2, y:(841.89 - img.height * s) / 2, width:img.width * s, height:img.height * s });
+            }
+            downloadBlobWithStats(new Blob([await pdf.save()], { type:'application/pdf' }), 'VJ_Scanner_Nitidez.pdf');
+        }
+
+        async function runOrganizePDF() {
+            const { PDFDocument, degrees } = PDFLib;
+            const src = await PDFDocument.load(await selectedFiles[0].arrayBuffer(), { ignoreEncryption: true });
+            const out = await PDFDocument.create();
+            const keep = organizePagesState.filter(i => !i.deleted);
+            if (!keep.length) throw new Error('Todas as páginas foram excluídas. Sobre ao menos uma para salvar.');
+            for (const item of keep) {
+                const [p] = await out.copyPages(src, [item.originalIndex]);
+                if (item.rotation) p.setRotation(degrees((p.getRotation().angle + item.rotation) % 360));
+                out.addPage(p);
+            }
+            downloadBlobWithStats(new Blob([await out.save()], { type:'application/pdf' }), 'VJ_Organizado.pdf');
+        }
+
+        async function rotateSinglePdfBlob(file) {
+            const angle = parseInt((document.getElementById('rotate-angle') || {}).value || '90', 10);
+            const { PDFDocument, degrees } = PDFLib;
+            const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+            pdf.getPages().forEach(p => p.setRotation(degrees((p.getRotation().angle + angle) % 360)));
+            return new Blob([await pdf.save()], { type:'application/pdf' });
+        }
+
+        async function watermarkSinglePdfBlob(file) {
+            const text = toWinAnsi((document.getElementById('watermark-text') || {}).value || 'CONFIDENCIAL');
+            const op = parseInt((document.getElementById('watermark-opacity') || {}).value || '25', 10) / 100;
+            if (!text) throw new Error('O texto da marca d\'água ficou vazio depois de remover símbolos não suportados. Use letras e números.');
+            const { PDFDocument, rgb, degrees, StandardFonts } = PDFLib;
+            const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+            const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+            pdf.getPages().forEach(p => {
+                const { width, height } = p.getSize();
+                const size = Math.min(48, Math.max(18, width / (text.length * 0.42)));
+                p.drawText(text, { x:width * 0.12, y:height * 0.38, size, font, color:rgb(0.85, 0.15, 0.15), opacity:op, rotate:degrees(35) });
+            });
+            return new Blob([await pdf.save()], { type:'application/pdf' });
+        }
+
+        async function pageNumbersSinglePdfBlob(file) {
+            const { PDFDocument, StandardFonts } = PDFLib;
+            const start = parseInt((document.getElementById('pagenum-start') || {}).value || '1', 10) || 1;
+            const flsFormat = (document.getElementById('pagenum-fls') || {}).checked !== false;
+            const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+            const font = await pdf.embedFont(StandardFonts.HelveticaBold);
+            const pages = pdf.getPages();
+            const last = start + pages.length - 1;
+            pages.forEach((p, i) => {
+                const label = flsFormat ? ('Fls. ' + (start + i) + ' / ' + last) : String(start + i);
+                p.drawText(label, { x:p.getSize().width - 90, y:20, size:10, font });
+            });
+            return new Blob([await pdf.save()], { type:'application/pdf' });
+        }
+
+        async function runPdfToJpg() {
+            const zip = new JSZip();
+            for (const file of selectedFiles) {
+                const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                const base = file.name.replace(/\.pdf$/i, '');
+                try {
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        setProgress(Math.round((i / pdf.numPages) * 90), 'Renderizando página ' + i + '...');
+                        const page = await pdf.getPage(i);
+                        const vp = page.getViewport({ scale:2.0 });
+                        const c = document.createElement('canvas');
+                        c.width = vp.width; c.height = vp.height;
+                        const ctx = c.getContext('2d');
+                        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                        await page.render({ canvasContext:ctx, viewport:vp }).promise;
+                        // Prefixo com o nome do arquivo: antes, converter vários PDFs
+                        // sobrescrevia pag_1.jpg de todos eles dentro do mesmo zip.
+                        zip.file(base + '_pag_' + String(i).padStart(3, '0') + '.jpg', await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)));
+                    }
+                } finally {
+                    if (pdf.destroy) { try { pdf.destroy(); } catch (e) {} }
+                }
+            }
+            downloadBlobWithStats(await zip.generateAsync({ type:'blob' }), 'VJ_JPGs.zip');
+        }
+
+        /* ==================== IA / TRADUÇÃO ==================== */
+        function localExtractiveSummary(fullText, length) {
+            const count = length === 1 ? 5 : (length === 2 ? 12 : 25);
+            const sentences = fullText.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 40);
+            if (!sentences.length) return fullText.slice(0, 2000);
+            // Pontuação simples por frequência de palavras relevantes.
+            const freq = Object.create(null);
+            const stop = new Set(['para','como','pela','pelo','esse','essa','isso','mais','entre','sobre','quando','porque','sendo','pelos','pelas','desta','deste','nesta','neste','que','com','dos','das','uma','por','não','ser','foi','são','aos','nas','nos','ter','seu','sua']);
+            fullText.toLowerCase().replace(/[^a-záàâãéêíóôõúüç\s]/g, ' ').split(/\s+/).forEach(w => {
+                if (w.length < 4 || stop.has(w)) return;
+                freq[w] = (freq[w] || 0) + 1;
+            });
+            const scored = sentences.map((s, i) => {
+                let score = 0;
+                s.toLowerCase().split(/\s+/).forEach(w => { score += freq[w] || 0; });
+                return { s, i, score: score / Math.sqrt(s.length) };
+            });
+            return scored.sort((a, b) => b.score - a.score).slice(0, count)
+                .sort((a, b) => a.i - b.i)
+                .map(x => '• ' + x.s).join(NL + NL);
+        }
+
+        async function runAdvancedAiSummary() {
+            const pages = await extractRichLinesFromPDF(selectedFiles[0]);
+            const fullText = pages.map(p => p.lines.map(l => l.fullText).join(' ')).join(NL + NL);
+            if (!fullText.trim()) throw new Error('Não encontrei texto neste PDF. Se ele for digitalizado, use antes a ferramenta OCR.');
+            const lenGuide = { 1:'curto (5 tópicos)', 2:'médio (10 tópicos)', 3:'longo e detalhado' }[summaryState.length];
+
+            if (summaryState.mode === 'cloud') {
+                let apiKey = '';
+                try { apiKey = (localStorage.getItem('vj_gemini_api_key') || '').trim(); } catch (e) {}
+                if (apiKey.length < 10) {
+                    throw new Error('O modo Google Gemini precisa da sua chave pessoal. Clique em 🔑 Chave IA no topo da página, ou use o modo Local.');
+                }
+                const ok = await askCloudConsent('Google Gemini', 'o texto deste PDF (até 28 mil caracteres)');
+                if (!ok) { showTextResult('Envio cancelado por você. Nenhum dado saiu do seu aparelho.' + NL + NL + 'Dica: o modo Local gera um resumo sem enviar nada.', 'txt'); return; }
+
+                setProgress(60, 'Enviando ao Google Gemini...');
+                const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(apiKey), {
+                    method:'POST', headers:{ 'Content-Type':'application/json' },
+                    body:JSON.stringify({ contents:[{ parts:[{ text:'Faça um resumo ' + lenGuide + ' em português:' + NL + fullText.slice(0, 28000) }] }] })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error('O Google recusou a requisição: ' + data.error.message);
+                if (data.candidates && data.candidates[0]) {
+                    showTextResult(data.candidates[0].content.parts[0].text, 'md');
+                    return;
+                }
+                throw new Error('O Google respondeu sem conteúdo. Verifique se sua chave está válida.');
+            }
+
+            setProgress(80, 'Resumindo localmente...');
+            showTextResult('RESUMO EXECUTIVO LOCAL (' + lenGuide.toUpperCase() + ')' + NL + '(gerado no seu aparelho, sem enviar nada para fora)' + NL + NL + localExtractiveSummary(fullText, summaryState.length), 'txt');
+        }
+
+        async function runAdvancedTranslatePdf() {
+            const ok = await askCloudConsent('o serviço de tradução do Google', 'o texto de todas as páginas deste PDF');
+            if (!ok) { showTextResult('Tradução cancelada por você. Nenhum dado saiu do seu aparelho.', 'txt'); return; }
+
+            const pages = await extractRichLinesFromPDF(selectedFiles[0]);
+            if (!pages.length) throw new Error('Não encontrei texto neste PDF.');
+            const translatedPages = [];
+            for (let i = 0; i < pages.length; i++) {
+                setProgress(Math.round(((i + 1) / pages.length) * 85), 'Traduzindo página ' + (i + 1) + '/' + pages.length + '...');
+                const txt = pages[i].lines.map(l => l.fullText).join(NL);
+                if (!txt.trim()) { translatedPages.push({ pageNumber:i + 1, text:'' }); continue; }
+                // Divide em pedaços: o endpoint corta textos longos silenciosamente.
+                const chunks = txt.match(/[\s\S]{1,1500}(?=\s|$)/g) || [txt];
+                let outText = '';
+                for (const chunk of chunks) {
+                    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + translateState.from + '&tl=' + translateState.to + '&dt=t&q=' + encodeURIComponent(chunk);
+                    const resp = await fetch(url);
+                    if (!resp.ok) throw new Error('O serviço de tradução recusou a requisição (HTTP ' + resp.status + '). Tente novamente em alguns minutos.');
+                    const json = await resp.json();
+                    outText += json[0].map(x => x[0]).join('');
+                }
+                translatedPages.push({ pageNumber:i + 1, text:outText });
+            }
+            if (translateState.layout === 'keep') {
+                setProgress(92, 'Montando o PDF traduzido...');
+                const html = translatedPages.map(p => '<div style="page-break-after:always;"><h4>Página ' + p.pageNumber + '</h4><p style="white-space:pre-wrap;">' + escapeHtml(p.text) + '</p></div>').join('');
+                downloadBlobWithStats(await renderHtmlToPdfBlob(html), 'VJ_Traduzido.pdf');
+            } else {
+                showTextResult(translatedPages.map(p => '=== PÁGINA ' + p.pageNumber + ' ===' + NL + p.text).join(NL + NL), 'txt');
+            }
+        }
+
+        async function runOcrPdf() {
+            if (ocrOutput === 'pdf') { await runOcrToSearchablePdf(); return; }
+            const pages = await extractRichLinesFromPDF(selectedFiles[0], true);
+            showTextResult(pages.map(p => '=== PÁGINA ' + p.pageNumber + ' ===' + NL + p.lines.map(l => l.fullText).join(NL)).join(NL + NL), 'txt');
+        }
+
+        /* ====================================================================
+           OCR COM SAÍDA EM PDF PESQUISÁVEL
+           A página digitalizada continua sendo a imagem original; por cima
+           dela é desenhada uma camada de texto com opacidade zero, palavra a
+           palavra, nas coordenadas que o Tesseract devolve. O olho vê o
+           escaneamento de sempre, mas o Ctrl+F e o copiar/colar passam a
+           funcionar — que é o que o processo digitalizado precisa.
+        ==================================================================== */
+
+        // O formato do resultado do Tesseract mudou entre versões: às vezes as
+        // palavras vêm em data.words, às vezes aninhadas em blocks > paragraphs
+        // > lines > words. Esta função aceita as duas formas.
+        function collectOcrWords(data) {
+            const out = [];
+            const seen = new Set();
+            function pushWords(arr) {
+                if (!Array.isArray(arr)) return;
+                arr.forEach(w => {
+                    if (w && w.bbox && typeof w.text === 'string' && !seen.has(w)) { seen.add(w); out.push(w); }
+                });
+            }
+            function walk(node, depth) {
+                if (!node || depth > 6) return;
+                if (Array.isArray(node)) { node.forEach(n => walk(n, depth + 1)); return; }
+                if (typeof node !== 'object') return;
+                if (node.words) pushWords(node.words);
+                ['blocks', 'paragraphs', 'lines', 'symbols'].forEach(k => {
+                    if (node[k]) walk(node[k], depth + 1);
+                });
+            }
+            if (data && data.words) pushWords(data.words);
+            if (!out.length) walk(data && (data.blocks || data), 0);
+            return out;
+        }
+
+        async function runOcrToSearchablePdf() {
+            if (!window.Tesseract) throw new Error('O motor de OCR não carregou. Verifique sua conexão e recarregue a página.');
+            const { PDFDocument, StandardFonts, rgb } = PDFLib;
+            const file = selectedFiles[0];
+            const isPdf = /\.pdf$/i.test(file.name);
+            const out = await PDFDocument.create();
+            const font = await out.embedFont(StandardFonts.Helvetica);
+            const RENDER_SCALE = 2;
+
+            // Monta a lista de páginas a processar, venha de PDF ou de imagem.
+            const paginas = [];
+            let srcPdf = null;
+            if (isPdf) {
+                srcPdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+                for (let i = 1; i <= srcPdf.numPages; i++) paginas.push(i);
+            } else {
+                paginas.push(1);
+            }
+
+            let totalPalavras = 0;
+            try {
+                for (let idx = 0; idx < paginas.length; idx++) {
+                    const n = paginas[idx];
+                    const prog = Math.round((idx / paginas.length) * 90);
+                    setProgress(prog + 2, 'Preparando a página ' + n + ' de ' + paginas.length + '...');
+
+                    let canvas, ptW, ptH;
+                    if (isPdf) {
+                        const page = await srcPdf.getPage(n);
+                        const vp = page.getViewport({ scale: RENDER_SCALE });
+                        const pt = page.getViewport({ scale: 1 });
+                        ptW = pt.width; ptH = pt.height;
+                        canvas = document.createElement('canvas');
+                        canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+                    } else {
+                        const img = await loadImageElement(file);
+                        canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        // A folha fica no tamanho da imagem, convertido para pontos.
+                        ptW = canvas.width / RENDER_SCALE;
+                        ptH = canvas.height / RENDER_SCALE;
+                    }
+
+                    setProgress(prog + 6, 'Reconhecendo o texto da página ' + n + ' (isso é a parte lenta)...');
+                    const resultado = await Tesseract.recognize(canvas, 'por');
+                    const palavras = collectOcrWords(resultado.data);
+
+                    const jpg = await out.embedJpg(canvas.toDataURL('image/jpeg', 0.86));
+                    const pagina = out.addPage([ptW, ptH]);
+                    pagina.drawImage(jpg, { x:0, y:0, width:ptW, height:ptH });
+
+                    const fx = ptW / canvas.width, fy = ptH / canvas.height;
+                    palavras.forEach(w => {
+                        const txt = toWinAnsi(w.text);
+                        if (!txt) return;
+                        if (typeof w.confidence === 'number' && w.confidence < 30) return;
+                        const b = w.bbox;
+                        const x = b.x0 * fx;
+                        const larguraAlvo = Math.max(1, (b.x1 - b.x0) * fx);
+                        const alturaCaixa = Math.max(1, (b.y1 - b.y0) * fy);
+                        // Desenha a partir da base da palavra, com o eixo Y do PDF.
+                        const y = ptH - (b.y1 * fy);
+                        let size = alturaCaixa * 0.86;
+                        try {
+                            const medida = font.widthOfTextAtSize(txt, size);
+                            // Ajusta o corpo para a palavra ocupar aproximadamente a
+                            // mesma largura da caixa reconhecida, para a seleção do
+                            // mouse cair em cima do texto certo.
+                            if (medida > 0) size = Math.max(1, Math.min(size * 3, size * (larguraAlvo / medida)));
+                        } catch (e) { /* caractere fora da fonte: mantém o tamanho */ }
+                        try {
+                            pagina.drawText(txt, { x, y, size, font, color: rgb(0, 0, 0), opacity: 0 });
+                            totalPalavras++;
+                        } catch (e) { /* palavra impossível de desenhar: ignora */ }
+                    });
+                }
+            } finally {
+                if (srcPdf && srcPdf.destroy) { try { srcPdf.destroy(); } catch (e) {} }
+            }
+
+            if (!totalPalavras) {
+                throw new Error('O OCR não encontrou nenhuma palavra legível neste arquivo. Se o documento estiver muito claro, torto ou borrado, tente antes a ferramenta "Endireitar documento" no VJ IMG.');
+            }
+            setProgress(96, 'Montando o PDF pesquisável...');
+            scrubMetadata(out);
+            downloadBlobWithStats(new Blob([await out.save({ useObjectStreams:true })], { type:'application/pdf' }), file.name.replace(/\.[^.]+$/, '') + '_pesquisavel.pdf');
+            alert('Pronto: ' + totalPalavras + ' palavras foram incluídas na camada de texto.' + NL + NL +
+                'Abra o PDF e teste com Ctrl+F. O documento continua com a aparência do escaneamento — o texto fica invisível, por baixo.');
+        }
+
+        async function runComparePdf() {
+            if (selectedFiles.length < 2) throw new Error('Adicione 2 PDFs usando o botão + antes de comparar.');
+            const pA = await extractRichLinesFromPDF(selectedFiles[0]);
+            const pB = await extractRichLinesFromPDF(selectedFiles[1]);
+            const sA = new Set(pA.reduce((acc, p) => acc.concat(p.lines.map(l => l.fullText)), []));
+            const sB = new Set(pB.reduce((acc, p) => acc.concat(p.lines.map(l => l.fullText)), []));
+            const added = Array.from(sB).filter(x => !sA.has(x));
+            const removed = Array.from(sA).filter(x => !sB.has(x));
+            showTextResult(
+                'COMPARAÇÃO' + NL + 'A: ' + selectedFiles[0].name + NL + 'B: ' + selectedFiles[1].name + NL + NL +
+                '🟢 LINHAS SÓ EM B (' + added.length + '):' + NL + (added.join(NL) || '(nenhuma)') + NL + NL +
+                '🔴 LINHAS SÓ EM A (' + removed.length + '):' + NL + (removed.join(NL) || '(nenhuma)'), 'txt');
+        }
+
+        async function runPdfToMarkdownBatch() {
+            const pages = await extractRichLinesFromPDF(selectedFiles[0]);
+            showTextResult(pages.map(p => '## Página ' + p.pageNumber + NL + NL + p.lines.map(l => l.fullText).join(NL + NL)).join(NL + NL), 'md');
+        }
+
+        /* ==================== SAÍDA ==================== */
+        function showTextResult(text, ext) {
+            lastGeneratedText = text; lastGeneratedExt = ext;
+            document.getElementById('ws-result-area').classList.remove('hidden');
+            document.getElementById('ws-result-content').textContent = text;
+            document.getElementById('ws-result-area').scrollIntoView({ behavior:'smooth' });
+        }
+
+        function copyResultText() {
+            navigator.clipboard.writeText(lastGeneratedText)
+                .then(() => alert('Copiado!'))
+                .catch(() => alert('Seu navegador bloqueou a cópia automática. Selecione o texto e use Ctrl+C.'));
+        }
+        function downloadTextOutput() {
+            downloadBlobWithStats(new Blob([lastGeneratedText], { type:'text/plain;charset=utf-8' }), 'VJ_Resultado.' + lastGeneratedExt);
+        }
+
+        function downloadBlobWithStats(blob, name) {
+            lastOutputBlob = blob; lastOutputFilename = name;
+            const origBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0) || blob.size;
+            const origKB = (origBytes / 1024).toFixed(1), newKB = (blob.size / 1024).toFixed(1);
+            const diffPct = origBytes > 0 ? Math.round(((origBytes - blob.size) / origBytes) * 100) : 0;
+
+            const banner = document.getElementById('ws-success-banner');
+            banner.classList.remove('hidden');
+            document.getElementById('ws-stats-line').textContent =
+                'Arquivo: ' + name + ' • Original: ' + origKB + ' KB ➔ Final: ' + newKB + ' KB ' + (diffPct > 0 ? '(Economia de ' + diffPct + '%!)' : '');
+            document.getElementById('ws-chain-actions').classList.toggle('hidden', blob.type !== 'application/pdf');
+            reDownloadLastBlob();
+            banner.scrollIntoView({ behavior:'smooth' });
+        }
+
+        function reDownloadLastBlob() {
+            if (!lastOutputBlob) return;
+            const url = URL.createObjectURL(lastOutputBlob);
+            const a = document.createElement('a');
+            a.href = url; a.download = lastOutputFilename;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }
+
+        function chainToTool(nextToolId) {
+            if (!lastOutputBlob) return;
+            selectedFiles = [new File([lastOutputBlob], lastOutputFilename, { type:'application/pdf' })];
+            releasePdfDoc();
+            openTool(nextToolId, true);
+        }
+
+        /* ==================== MODAIS ==================== */
+        function togglePrivacyModal() { document.getElementById('privacy-modal').classList.toggle('hidden'); }
+
+        function toggleDiagModal() {
+            const m = document.getElementById('diag-modal');
+            m.classList.toggle('hidden');
+            if (!m.classList.contains('hidden')) {
+                let hasKey = false;
+                try { hasKey = (localStorage.getItem('vj_gemini_api_key') || '').length > 10; } catch (e) {}
+                const checks = [
+                    { name:'PDF-Lib (manipulação binária e vetorial)', ok:!!window.PDFLib, req:true },
+                    { name:'Mozilla PDF.js (renderização)', ok:!!window.pdfjsLib, req:true },
+                    { name:'Docx.js (gerador .DOCX nativo)', ok:!!window.docx, req:true },
+                    { name:'SheetJS (gerador .XLSX)', ok:!!window.XLSX, req:true },
+                    { name:'SortableJS (arrastar e soltar)', ok:!!window.Sortable, req:true },
+                    { name:'Tesseract.js (OCR / ROC)', ok:!!window.Tesseract, req:true },
+                    { name:'PptxGenJS (PowerPoint)', ok:!!window.PptxGenJS, req:true },
+                    { name:'Mammoth (ler Word)', ok:!!window.mammoth, req:true },
+                    { name:'html2pdf (Word para PDF)', ok:!!window.html2pdf, req:true },
+                    { name:'JSZip (lotes .zip)', ok:!!window.JSZip, req:true },
+                    { name:'Tailwind (estilos)', ok:!!window.tailwind, req:true },
+                    { name:'Chave Gemini (opcional, só para o Resumo na nuvem)', ok:hasKey, req:false },
+                    { name:'Modo offline (Service Worker registrado)', ok:!!(navigator.serviceWorker && navigator.serviceWorker.controller), req:false }
+                ];
+                document.getElementById('diag-list').innerHTML = checks.map(c => {
+                    const label = c.ok ? '✓ OK' : (c.req ? '✕ FALHOU' : 'OPCIONAL');
+                    const cls = c.ok ? 'bg-emerald-500/15 text-emerald-600' : (c.req ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600');
+                    return '<div class="flex items-center justify-between p-2.5 rounded-xl theme-subtle border gap-2"><span class="font-bold">' + escapeHtml(c.name) + '</span><span class="px-2.5 py-0.5 rounded-full font-extrabold shrink-0 ' + cls + '">' + label + '</span></div>';
+                }).join('');
+            }
+        }
+
+        function toggleSettingsModal() { document.getElementById('settings-modal').classList.toggle('hidden'); }
+        function saveSettings() {
+            try { localStorage.setItem('vj_gemini_api_key', document.getElementById('gemini-api-key-input').value.trim()); } catch (e) {}
+            toggleSettingsModal();
+        }
+        function clearSavedApiKey() {
+            try { localStorage.removeItem('vj_gemini_api_key'); } catch (e) {}
+            document.getElementById('gemini-api-key-input').value = '';
+            alert('Chave removida deste navegador com segurança!');
+        }
+        function toggleHistoryModal() {
+            const m = document.getElementById('history-modal');
+            m.classList.toggle('hidden');
+            if (!m.classList.contains('hidden')) {
+                let h = [];
+                try { h = JSON.parse(localStorage.getItem('vj_history') || '[]'); } catch (e) {}
+                document.getElementById('history-list').innerHTML = h.length
+                    ? h.map(i => '<div class="flex justify-between p-2 border rounded-lg gap-2"><b class="truncate">' + escapeHtml(i.tool) + ' (' + escapeHtml(i.file) + ')</b><span class="shrink-0">' + escapeHtml(i.date) + '</span></div>').join('')
+                    : '<p class="text-center py-4">Vazio</p>';
+            }
+        }
+        function saveToHistory(tool, file) {
+            try {
+                const h = JSON.parse(localStorage.getItem('vj_history') || '[]');
+                h.unshift({ tool, file, date:new Date().toLocaleTimeString('pt-BR') });
+                localStorage.setItem('vj_history', JSON.stringify(h.slice(0, 30)));
+            } catch (e) {}
+        }
+        function clearHistory() {
+            try { localStorage.removeItem('vj_history'); } catch (e) {}
+            toggleHistoryModal();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            ['zoom-modal', 'privacy-modal', 'diag-modal', 'settings-modal', 'history-modal'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+        });
+
+        /* ==================== EXPOSIÇÃO CONTROLADA ====================
+           Só o que o HTML realmente chama fica global. O resto permanece
+           fechado dentro deste módulo. */
+        const VJ = {
+            setWorkflow: (k, v) => { workflowSteps[k] = v; },
+            setCompressMode: (v) => { compressMode = v; renderRightSidebarControls(); },
+            setWordOcr: (v) => { wordOcrMode = v; renderRightSidebarControls(); },
+            setExcel: (k, v) => { excelState[k] = v; renderRightSidebarControls(); },
+            setTranslate: (k, v) => { translateState[k] = v; renderRightSidebarControls(); },
+            setScannerFilter: (v) => { scannerFilter = v; },
+            setPdfTargetMode: (v) => { pdfCompressByTarget = v; renderRightSidebarControls(); },
+            setPdfTargetMB: (v, redraw) => {
+                pdfTargetMB = Math.max(0.2, parseFloat(v) || 10);
+                if (redraw) renderRightSidebarControls();
+            },
+            setSignMode: (m) => { signState.mode = m; renderRightSidebarControls(); },
+            setSignWidth: (v) => {
+                signState.width = parseInt(v, 10) || 180;
+                const el = document.getElementById('lbl-signw');
+                if (el) el.textContent = signState.width;
+            },
+            undoSignStroke: () => { signState.paths.pop(); signState.dataUrl = buildSignatureDataUrl(); redrawSignPad(); },
+            clearSignPad: () => { signState.paths = []; signState.dataUrl = null; redrawSignPad(); },
+            setOcrOutput: (v) => { ocrOutput = v; renderRightSidebarControls(); },
+            setSplitTab, setSplitMode, addSplitInterval, removeSplitInterval, updateSplitIntv,
+            setMergeIntervals: (v) => { splitState.mergeIntervals = v; },
+            setFixedStep: (v) => { splitState.fixedStep = Math.max(1, parseInt(v, 10) || 1); },
+            setMaxSize: (v) => { splitState.maxSizeMB = Math.max(0.3, parseFloat(v) || 5); },
+            rotateOrganizePage, deleteOrganizePage,
+            changeRedactPage, undoRedact, clearRedact,
+            openZoomModal, removeStudioFile
+        };
+
+        Object.assign(window, {
+            VJ, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect, handleInitialDrop,
+            executeActiveTool, setTheme, togglePrivacyModal, toggleDiagModal, toggleSettingsModal,
+            toggleHistoryModal, saveSettings, clearSavedApiKey, clearHistory, closeZoomModal, changeZoomPage,
+            selectSummaryMode, closeAiSummaryModalAndRun, copyResultText, downloadTextOutput,
+            reDownloadLastBlob, chainToTool, resolveCloudConsent
+        });
+    })();
+    </script>
+</body>
+</html>

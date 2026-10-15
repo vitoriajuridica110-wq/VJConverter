@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VJ IMG 4.2 — editor de imagens em lote que processa tudo no seu próprio navegador: comprimir, redimensionar, recortar, remover fundo e desfocar rostos.">
+    <meta name="theme-color" content="#4d90fe">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>VJ IMG 4.2 — Todas as ferramentas para editar imagens em lote</title>
+
+    <!-- Versões travadas. Rode ./gerar-sri.sh para preencher os integrity="..." -->
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- IA rápida (MediaPipe) + IA de estúdio (IS-Net / U2-Net via ESM) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js"></script>
+    <script type="module">
+        import imglyRemoveBackground from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm';
+        window.imglyRemoveBackground = imglyRemoveBackground;
+        window.dispatchEvent(new Event('vj-imgly-ready'));
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        :root[data-theme="light"] { --bg-main:#f5f7fb; --bg-surface:#ffffff; --bg-subtle:#edf1f8; --text-main:#1e293b; --text-muted:#64748b; --border-color:#e2e8f0; --accent:#4d90fe; --accent-hover:#357ae8; }
+        :root[data-theme="dark"] { --bg-main:#0b0f19; --bg-surface:#151c2c; --bg-subtle:#1e293b; --text-main:#f1f5f9; --text-muted:#94a3b8; --border-color:#263147; --accent:#3b82f6; --accent-hover:#2563eb; }
+        :root[data-theme="sepia"] { --bg-main:#f4ecd8; --bg-surface:#fdf6e3; --bg-subtle:#eee8d5; --text-main:#3c3024; --text-muted:#705e4a; --border-color:#dfd5be; --accent:#2b6cb0; --accent-hover:#2c5282; }
+        body { font-family:'Inter',sans-serif; background-color:var(--bg-main); color:var(--text-main); }
+        .theme-surface { background-color:var(--bg-surface); border-color:var(--border-color); color:var(--text-main); }
+        .theme-subtle { background-color:var(--bg-subtle); border-color:var(--border-color); color:var(--text-main); }
+        .theme-muted { color:var(--text-muted); }
+        .theme-input { background-color:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-main); }
+        .tool-card { background-color:var(--bg-surface); border:1px solid var(--border-color); transition:all 0.2s ease; }
+        .tool-card:hover { transform:translateY(-4px); box-shadow:0 12px 24px -6px rgba(0,0,0,0.1); border-color:var(--accent); }
+        .category-pill { background-color:var(--bg-surface); border:1px solid var(--border-color); color:var(--text-main); }
+        .category-pill.active { background-color:#1e293b; border-color:#1e293b; color:#fff; }
+        .theme-btn.active { background-color:var(--accent); color:#fff; }
+        .checkerboard {
+            background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #ffffff;
+        }
+        .option-row { border-bottom:1px solid var(--border-color); cursor:pointer; transition:background 0.15s; }
+        .option-row.selected { background-color:rgba(77,144,254,0.1); }
+        /* Permite desenhar com o dedo sem a página rolar junto */
+        .draw-surface { touch-action:none; -webkit-user-select:none; user-select:none; }
+        button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- TOP NAVBAR -->
+    <header class="theme-surface border-b sticky top-0 z-40 shadow-sm h-14 flex items-center px-4 sm:px-6 justify-between">
+        <div class="flex items-center space-x-6">
+            <button type="button" onclick="showHome()" class="flex items-center space-x-2 focus:outline-none">
+                <div class="w-9 h-9 rounded-lg bg-[#4d90fe] flex items-center justify-center text-white font-extrabold text-lg shadow">VJ</div>
+                <div class="text-left">
+                    <span class="font-extrabold text-lg sm:text-xl tracking-tight block leading-none">VJ<span class="text-[#4d90fe]">IMG</span></span>
+                    <span class="text-[9px] font-bold uppercase tracking-widest text-emerald-600">🔒 100% no seu aparelho</span>
+                </div>
+            </button>
+            <nav class="hidden xl:flex items-center space-x-5 text-xs font-bold tracking-wider uppercase">
+                <button type="button" onclick="openTool('compress')" class="hover:text-[#4d90fe]">Comprimir Imagem</button>
+                <button type="button" onclick="openTool('resize')" class="hover:text-[#4d90fe]">Redimensionar</button>
+                <button type="button" onclick="openTool('crop')" class="hover:text-[#4d90fe]">Recortar</button>
+                <button type="button" onclick="openTool('removebg')" class="hover:text-[#4d90fe]">Remover Fundo</button>
+                <button type="button" onclick="openTool('editor')" class="hover:text-[#4d90fe]">Editor de Fotos</button>
+                <button type="button" onclick="showHome()" class="hover:text-[#4d90fe]">Mais Ferramentas ▾</button>
+            </nav>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <a href="index.html" class="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#e5322d] hover:bg-[#c92520] text-white shadow-sm flex items-center gap-1.5 transition" title="Ir para o VJ Converter de PDF">
+                <span>📄 VJ PDF</span>
+            </a>
+            <a href="midia.html" class="hidden sm:flex text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#7c3aed] hover:bg-[#6d28d9] text-white shadow-sm items-center gap-1.5 transition" title="Vídeo e áudio">
+                <span>🎬 VJ Mídia</span>
+            </a>
+            <div class="flex items-center rounded-xl p-0.5 theme-subtle border text-xs">
+                <button type="button" onclick="setTheme('light')" id="theme-btn-light" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema claro">☀️</button>
+                <button type="button" onclick="setTheme('sepia')" id="theme-btn-sepia" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema sépia">📜</button>
+                <button type="button" onclick="setTheme('dark')" id="theme-btn-dark" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema escuro">🌙</button>
+            </div>
+            <button type="button" onclick="toggleDiagModal()" class="hidden sm:inline-block text-xs font-semibold px-2.5 py-1.5 rounded-lg theme-surface border">🩺 Motores</button>
+        </div>
+    </header>
+
+    <!-- HOME CATALOG VIEW -->
+    <main id="home-view" class="flex-grow">
+        <section class="py-10 px-4 text-center max-w-4xl mx-auto">
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2">Todas as ferramentas necessárias para editar imagens em lote</h1>
+            <p class="text-sm sm:text-base theme-muted max-w-2xl mx-auto">
+                O seu editor de fotos online chegou e será para sempre grátis! Nenhuma imagem é enviada para servidor nenhum — tudo acontece dentro do seu navegador.
+            </p>
+            <div class="mt-7 flex flex-wrap items-center justify-center gap-2">
+                <button type="button" onclick="filterCategory('all')" data-cat="all" class="category-pill active px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Todos</button>
+                <button type="button" onclick="filterCategory('otimizar')" data-cat="otimizar" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Otimizar</button>
+                <button type="button" onclick="filterCategory('criar')" data-cat="criar" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Criar</button>
+                <button type="button" onclick="filterCategory('editar')" data-cat="editar" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Editar</button>
+                <button type="button" onclick="filterCategory('converter')" data-cat="converter" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Converter</button>
+                <button type="button" onclick="filterCategory('seguranca')" data-cat="seguranca" class="category-pill px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Segurança</button>
+            </div>
+        </section>
+
+        <section class="max-w-7xl mx-auto px-4 sm:px-6 pb-16">
+            <div id="tools-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"></div>
+        </section>
+    </main>
+
+    <!-- WORKSPACE VIEW -->
+    <section id="workspace-view" class="hidden flex-grow flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+        <!-- STEP 1: INITIAL UPLOAD -->
+        <div id="ws-initial-upload" class="flex-grow flex flex-col items-center justify-center p-6 text-center" ondragover="event.preventDefault()" ondrop="handleInitialDrop(event)">
+            <div id="ws-icon-box" class="w-16 h-16 rounded-2xl mb-4 flex items-center justify-center text-white shadow-lg"></div>
+            <h2 id="ws-title" class="text-3xl font-extrabold mb-2"></h2>
+            <p id="ws-desc" class="theme-muted max-w-xl mb-5 text-sm sm:text-base"></p>
+            <div id="ws-net-warning" class="hidden max-w-xl mb-5 p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/40 text-sky-700 text-xs text-left leading-relaxed"></div>
+            <input type="file" id="ws-file-input" class="hidden" accept="image/*" multiple onchange="handleFileSelect(event)">
+            <button type="button" onclick="triggerFileInput()" class="bg-[#4d90fe] hover:bg-[#357ae8] text-white font-extrabold text-xl px-12 py-5 rounded-2xl shadow-xl transition transform hover:scale-105 mb-3">
+                Selecionar imagens
+            </button>
+            <p class="text-xs theme-muted">ou arraste e solte as imagens aqui (edição em lote de até 50 imagens)</p>
+            <button type="button" onclick="showHome()" class="mt-8 text-xs font-semibold theme-muted hover:underline">← Voltar a todas as ferramentas</button>
+        </div>
+
+        <!-- STEP 2: STUDIO SPLIT-SCREEN -->
+        <div id="ws-studio-layout" class="hidden flex-grow flex flex-col lg:flex-row h-full overflow-hidden relative">
+
+            <!-- LEFT / CENTER CANVAS -->
+            <div class="flex-grow h-full flex flex-col overflow-hidden relative" id="studio-left-wrapper">
+
+                <!-- Top Editor Toolbar -->
+                <div id="photo-editor-toolbar" class="hidden theme-surface border-b px-4 py-2 flex items-center justify-center gap-4 overflow-x-auto text-[11px] font-bold uppercase tracking-tight">
+                    <button type="button" onclick="VJ.setEditorTab('filter')" class="flex flex-col items-center gap-1 px-2.5 py-1 rounded hover:bg-blue-500/10"><i data-lucide="sliders" class="w-4 h-4"></i> Filtro e Luz</button>
+                    <button type="button" onclick="VJ.setEditorTab('transform')" class="flex flex-col items-center gap-1 px-2.5 py-1 rounded hover:bg-blue-500/10"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Transformar</button>
+                    <button type="button" onclick="VJ.setEditorTab('draw')" class="flex flex-col items-center gap-1 px-2.5 py-1 rounded hover:bg-blue-500/10"><i data-lucide="pencil" class="w-4 h-4"></i> Desenhar</button>
+                    <button type="button" onclick="VJ.setEditorTab('text')" class="flex flex-col items-center gap-1 px-2.5 py-1 rounded hover:bg-blue-500/10"><i data-lucide="type" class="w-4 h-4"></i> Texto</button>
+                    <button type="button" onclick="VJ.setEditorTab('stickers')" class="flex flex-col items-center gap-1 px-2.5 py-1 rounded hover:bg-blue-500/10"><i data-lucide="smile" class="w-4 h-4"></i> Stickers</button>
+                    <button type="button" onclick="VJ.setEditorTab('frame')" class="flex flex-col items-center gap-1 px-2.5 py-1 rounded hover:bg-blue-500/10"><i data-lucide="frame" class="w-4 h-4"></i> Moldura</button>
+                </div>
+
+                <!-- Main Visual Stage -->
+                <div class="flex-grow overflow-y-auto p-6 relative select-none" id="studio-left-canvas" ondragover="event.preventDefault()" ondrop="handleInitialDrop(event)">
+                    <div class="mb-2">
+                        <button type="button" onclick="showHome()" class="text-xs font-bold px-3 py-1.5 rounded-lg theme-surface border shadow-sm hover:border-[#4d90fe]">← Todas as ferramentas</button>
+                    </div>
+
+                    <!-- Floating "+ Adicionar mais imagens" -->
+                    <div id="floating-add-btn" class="fixed lg:absolute top-16 right-6 lg:right-8 z-20 flex items-center gap-2 group">
+                        <span class="hidden sm:inline-block bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow">Adicionar mais imagens</span>
+                        <button type="button" onclick="triggerFileInput()" class="relative w-11 h-11 rounded-full bg-[#4d90fe] hover:bg-[#357ae8] text-white shadow-xl flex items-center justify-center text-2xl font-bold" aria-label="Adicionar mais imagens">
+                            +
+                            <span id="floating-file-badge" class="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-slate-900 text-white text-[11px] font-extrabold flex items-center justify-center border-2 border-white">1</span>
+                        </button>
+                    </div>
+
+                    <div id="studio-visual-stage" class="min-h-[360px] flex flex-wrap items-center justify-center gap-8 pt-6 pb-12"></div>
+                </div>
+            </div>
+
+            <!-- RIGHT SIDEBAR -->
+            <aside class="w-full lg:w-[360px] shrink-0 theme-surface border-t lg:border-t-0 lg:border-l flex flex-col justify-between h-auto lg:h-full z-30 shadow-xl">
+                <div class="overflow-y-auto flex-grow">
+                    <div class="p-5 border-b text-center" style="border-color:var(--border-color);">
+                        <h3 id="sidebar-tool-title" class="text-xl font-extrabold"></h3>
+                    </div>
+                    <div id="sidebar-dynamic-controls" class="p-5 space-y-4 text-sm"></div>
+                </div>
+                <div class="p-5 border-t theme-surface" style="border-color:var(--border-color);">
+                    <button type="button" id="ws-execute-btn" onclick="executeActiveTool()" class="w-full bg-[#4d90fe] hover:bg-[#357ae8] text-white font-extrabold text-base py-4 px-6 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                        <span id="ws-execute-label">Processar IMAGENS</span> <span>⊕</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Progress Overlay -->
+            <div id="ws-progress-area" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div class="theme-surface rounded-2xl max-w-md w-full p-6 text-center shadow-2xl border">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-slate-300 border-t-[#4d90fe] mb-3"></div>
+                    <p id="ws-progress-text" class="font-extrabold text-base">Processando imagens...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DIAGNOSTICS MODAL -->
+    <div id="diag-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div class="theme-surface rounded-2xl max-w-lg w-full p-6 shadow-2xl border">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-extrabold">🩺 Diagnóstico dos Motores</h3>
+                <button type="button" onclick="toggleDiagModal()" aria-label="Fechar">✕</button>
+            </div>
+            <div id="diag-list" class="space-y-2 text-xs max-h-80 overflow-y-auto"></div>
+            <div class="mt-5 flex justify-end"><button type="button" onclick="toggleDiagModal()" class="px-5 py-2 rounded-xl text-xs font-bold bg-[#4d90fe] text-white">Fechar</button></div>
+        </div>
+    </div>
+
+    <footer class="theme-surface border-t py-4 px-4 text-center text-xs theme-muted">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <p>© 2026 <strong>VJ IMG 4.2 Studio</strong> — edição de imagens processada inteiramente no seu aparelho.</p>
+            <a href="index.html" class="text-[#e5322d] font-bold hover:underline">📄 Ir para VJ Converter (PDF)</a>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        const MAX_FILES = 50;
+
+        /* ==================== REDE DE SEGURANÇA DOS CDNs ==================== */
+        const CDN_FALLBACKS = [
+            { check: () => window.tailwind, url: 'https://cdn.tailwindcss.com' },
+            { check: () => window.lucide, url: 'https://unpkg.com/lucide@latest' },
+            { check: () => window.SelfieSegmentation, url: 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js' },
+            { check: () => window.html2canvas, url: 'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js' }
+        ];
+        let mediapipeBase = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/';
+        function loadFallbacks() {
+            CDN_FALLBACKS.forEach(f => {
+                if (f.check()) return;
+                if (f.url.indexOf('selfie_segmentation') >= 0) mediapipeBase = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/';
+                const s = document.createElement('script');
+                s.src = f.url;
+                s.onload = () => { if (window.lucide) refreshIcons(); };
+                document.head.appendChild(s);
+            });
+        }
+
+        /* ==================== ARRASTO UNIFICADO (MOUSE + DEDO) ==================== */
+        function attachDrag(el, handlers) {
+            el.classList.add('draw-surface');
+            const toPoint = (e) => {
+                const r = el.getBoundingClientRect();
+                return { cssX: e.clientX - r.left, cssY: e.clientY - r.top, rect: r };
+            };
+            let active = false;
+            el.onpointerdown = (e) => {
+                e.preventDefault();
+                active = true;
+                try { el.setPointerCapture(e.pointerId); } catch (err) {}
+                handlers.start && handlers.start(toPoint(e), e);
+            };
+            el.onpointermove = (e) => {
+                const p = toPoint(e);
+                if (handlers.hover) handlers.hover(p, e, active);
+                if (!active) return;
+                e.preventDefault();
+                handlers.move && handlers.move(p, e);
+            };
+            const finish = (e) => {
+                if (!active) return;
+                active = false;
+                try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+                handlers.end && handlers.end(toPoint(e), e);
+            };
+            el.onpointerup = finish;
+            el.onpointercancel = finish;
+        }
+
+        /* ==================== CATÁLOGO ==================== */
+        const TOOLS = [
+            { id:'compress', title:'Comprimir IMAGEM', desc:'Comprima JPG, PNG e WEBP economizando espaço e mantendo a qualidade (a transparência é preservada).', cat:'otimizar', icon:'minimize-2', color:'bg-lime-500', sidebarTitle:'Comprimir imagens', btnLabel:'Comprimir IMAGENS' },
+            { id:'resize', title:'Redimensionar IMAGEM', desc:'Defina suas dimensões por porcentagem ou pixels e redimensione em lote.', cat:'editar', icon:'scaling', color:'bg-sky-400', sidebarTitle:'Opções de redimensionamento', btnLabel:'Redimensionar IMAGENS' },
+            { id:'crop', title:'Recortar IMAGEM', desc:'Arraste as alças azuis direto na foto ou digite os números. Recorta JPG, PNG, WEBP ou GIF.', cat:'editar', icon:'crop', color:'bg-cyan-500', sidebarTitle:'Opções de recorte', btnLabel:'Recortar IMAGEM' },
+            { id:'photo-id', title:'Foto 3x4 / Documento', desc:'Gabarito com as linhas de topo da cabeça, olhos e queixo, proporção travada e saída em pixels exatos.', cat:'editar', icon:'user', color:'bg-indigo-500', badge:'Edital', sidebarTitle:'Foto para documento', btnLabel:'Gerar foto' },
+            { id:'deskew', title:'Endireitar documento', desc:'Corrige a perspectiva da foto tirada torta: marque os 4 cantos do papel e ele vira um escaneamento reto.', cat:'otimizar', icon:'scan-line', color:'bg-teal-600', badge:'Novo!', sidebarTitle:'Correção de perspectiva', btnLabel:'Endireitar e salvar' },
+            { id:'to-jpg', title:'Converter para JPG', desc:'Transforme PNG, GIF, TIF, SVG, WEBP ou HEIC em JPG, em lote e de forma fácil.', cat:'converter', icon:'file-image', color:'bg-amber-400', sidebarTitle:'Opções de conversão', btnLabel:'Converter para JPG' },
+            { id:'from-jpg', title:'Converter de JPG', desc:'Converta imagens JPG para PNG ou WEBP em lote, com transparência e qualidade.', cat:'converter', icon:'images', color:'bg-yellow-500', sidebarTitle:'Conversão de JPG', btnLabel:'Converter IMAGEM' },
+            { id:'editor', title:'Editor de fotos', desc:'Texto e stickers que você arrasta com o dedo, filtros, desenho livre, molduras e espelhamento.', cat:'criar', icon:'wand-2', color:'bg-purple-500', sidebarTitle:'Editor de Fotos', btnLabel:'⬇ Guardar' },
+            { id:'upscale', title:'Ampliar Imagem', desc:'Dobra ou quadruplica a dimensão com reamostragem de alta qualidade e realce de nitidez.', cat:'otimizar', icon:'sparkles', color:'bg-lime-600', sidebarTitle:'Opções de ampliação', btnLabel:'Ampliar' },
+            { id:'removebg', title:'Remover fundo', desc:'IA automática + laço, borracha e pincel de restauração para o acabamento fino. Troque o fundo por uma cor.', cat:'editar', icon:'eraser', color:'bg-green-600', badge:'1ª vez: internet', sidebarTitle:'Remover fundo', btnLabel:'Remover fundo', needsNet:true },
+            { id:'watermark', title:'Marcar IMAGEM', desc:'Coloque texto por cima das suas imagens em segundos, escolhendo posição e transparência.', cat:'seguranca', icon:'stamp', color:'bg-blue-600', sidebarTitle:'Opções de Marca d\'Água', btnLabel:'Marcar IMAGENS' },
+            { id:'meme', title:'Gerador de memes', desc:'Crie seus memes com um passo só. Adicione legendas clássicas de topo e base.', cat:'criar', icon:'smile', color:'bg-pink-500', sidebarTitle:'Gerador de Memes', btnLabel:'Gerar MEME' },
+            { id:'rotate', title:'Girar IMAGEM', desc:'Gire várias imagens de uma só vez. Escolha paisagem ou retrato.', cat:'editar', icon:'rotate-cw', color:'bg-sky-500', sidebarTitle:'Girar Imagens', btnLabel:'Girar IMAGENS' },
+            { id:'html-to-img', title:'HTML para IMAGEM', desc:'Converte código HTML ou cartões estilizados em PNG de alta resolução, renderizado de verdade.', cat:'converter', icon:'code', color:'bg-amber-500', sidebarTitle:'HTML para Imagem', btnLabel:'Converter HTML' },
+            { id:'blur-face', title:'Desfocar rosto/placa', desc:'Desfoque rostos, placas e outros dados privados com intensidade proporcional à área marcada.', cat:'seguranca', icon:'scan-face', color:'bg-slate-600', sidebarTitle:'Desfocar Informação Privada', btnLabel:'Aplicar Desfoque' }
+        ];
+
+        /* ==================== ESTADO ==================== */
+        let activeTool = null;
+        let selectedFiles = [];
+        let resizeState = { mode:'pixels', width:1024, height:1024, percent:50, keepRatio:true, noEnlarge:false };
+        let cropState = { width:800, height:800, x:100, y:100 };
+        let fromJpgTarget = 'image/png';
+        let compressFormat = 'auto';
+        // Compressão por peso-alvo: o edital pede "até 500 KB", não "qualidade 75%".
+        let compressMode = 'quality';            // 'quality' | 'target'
+        let compressTargetKB = 500;
+        let compressAllowResize = true;
+
+        // Foto 3x4 / documento. O retângulo é guardado em coordenadas da 1ª imagem.
+        const ID_PRESETS = {
+            '3x4-300':   { label:'3x4 cm — 300 dpi', w:354,  h:472 },
+            '3x4-600':   { label:'3x4 cm — 600 dpi', w:709,  h:945 },
+            '5x7-300':   { label:'5x7 cm — 300 dpi', w:591,  h:827 },
+            'passaporte':{ label:'Passaporte 5x5 cm', w:591,  h:591 },
+            'custom':    { label:'Personalizado (px)', w:400, h:500 }
+        };
+        let idState = { preset:'3x4-300', customW:400, customH:500, whiteBg:false, limitKB:0, rect:null, guides:true };
+
+        // Endireitar documento: 4 cantos em coordenadas da imagem.
+        let deskewState = { corners:null, sharpen:true, forceA4:false, preview:null };
+        let upscaleFactor = 2;
+        let removeBgTolerance = 38;
+        let compareSliderPos = 50;
+        let editorState = {
+            tab:'filter', brightness:100, contrast:100, saturate:100, blur:0, sepia:0,
+            radius:0, border:0, borderColor:'#ffffff',
+            text:'', textColor:'#ffffff', textSize:42, textX:50, textY:85,
+            sticker:'', stickerSize:72, stickerX:50, stickerY:20,
+            zoom:100, rotation:0, flipH:false, flipV:false,
+            brushColor:'#e5322d', brushSize:8, paths:[], isDrawing:false
+        };
+        let removeBgMode = 'studio-hd';          // 'studio-hd' | 'ai' | 'flood'
+        let aiSegInstance = null;
+        let aiMaskCanvas = null;                  // resultado editável da 1ª imagem
+        let bgOriginalCanvas = null;              // original intacto, para o pincel de restauração
+        let eraseBrushSize = 28;
+        let bgManualTool = 'lasso';               // 'lasso' | 'brush' | 'restore' | 'none'
+        let bgZoom = 100;
+        let bgFeather = 2;                        // suavização da borda do laço
+        let bgFillColor = '';                     // '' = transparente
+        let lassoPoints = [];
+        let lassoMousePos = null;
+        let bgUndoStack = [];
+        let aiEdgeCutoff = 175;
+        let watermarkState = { text:'CONFIDENCIAL • VJ IMG', opacity:0.5, pos:'center' };
+        let memeState = { top:'QUANDO O CÓDIGO', bottom:'FUNCIONA DE PRIMEIRA' };
+        let rotateAngle = 90;
+        let blurBoxes = [];
+        let htmlSource = '<h2 style="font-size:26px;font-weight:800;margin-bottom:8px;">VJ IMG Studio 4.2</h2>\n<p style="opacity:.9">Converta qualquer bloco HTML em imagem PNG de alta resolução.</p>';
+
+        function refreshIcons() { if (window.lucide && window.lucide.createIcons) lucide.createIcons(); }
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m])); }
+        function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+        function setProgressText(t) { const el = document.getElementById('ws-progress-text'); if (el) el.textContent = t; }
+
+        function setTheme(t) {
+            document.documentElement.setAttribute('data-theme', t);
+            try { localStorage.setItem('vj_theme', t); } catch (e) {}
+            ['light', 'sepia', 'dark'].forEach(x => {
+                const b = document.getElementById('theme-btn-' + x);
+                if (b) b.classList.toggle('active', x === t);
+            });
+        }
+
+        // Páginas abertas por clique duplo (file:///) não podem criar Workers,
+        // e os dois motores de IA de remoção de fundo dependem disso.
+        function avisarArquivoLocal() {
+            if (location.protocol !== 'file:') return;
+            const link = document.querySelector('link[rel="manifest"]');
+            if (link) link.remove();
+            const alvo = document.querySelector('#home-view section');
+            if (!alvo) return;
+            const bar = document.createElement('div');
+            bar.className = 'max-w-3xl mx-auto mt-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/50 text-left';
+            bar.innerHTML = '<p class="font-bold text-amber-700 text-xs mb-1">⚠️ Você abriu esta página direto do computador (<code>file:///</code>).</p>' +
+                '<p class="text-[11px] leading-relaxed theme-muted">Quase tudo funciona assim, mas a <strong>IA de remover fundo</strong> não: ela precisa de um endereço web. Abra pelo endereço publicado (<code>https://...</code>), ou rode <code class="px-1 rounded theme-subtle border">npx serve</code> na pasta do projeto e use o <code>http://localhost</code> que aparecer. O recorte manual (laço e borracha) continua funcionando normalmente.</p>';
+            alvo.appendChild(bar);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadFallbacks();
+            avisarArquivoLocal();
+            let saved = 'light';
+            try { saved = localStorage.getItem('vj_theme') || 'light'; } catch (e) {}
+            setTheme(saved);
+            renderToolsGrid('all');
+            if ('serviceWorker' in navigator && location.protocol === 'https:') {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            }
+            refreshIcons();
+        });
+
+        /* ==================== CATÁLOGO ==================== */
+        function renderToolsGrid(cat) {
+            const grid = document.getElementById('tools-grid');
+            grid.innerHTML = '';
+            const list = cat === 'all' ? TOOLS : TOOLS.filter(t => t.cat === cat);
+            list.forEach(tool => {
+                const badge = tool.badge ? '<span class="px-2 py-0.5 text-[10px] font-bold rounded bg-sky-100 text-sky-700">' + escapeHtml(tool.badge) + '</span>' : '';
+                const card = document.createElement('div');
+                card.className = 'tool-card rounded-2xl p-6 cursor-pointer flex flex-col justify-between';
+                card.setAttribute('role', 'button');
+                card.setAttribute('tabindex', '0');
+                card.onclick = () => openTool(tool.id);
+                card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTool(tool.id); } };
+                card.innerHTML = '<div><div class="flex items-start justify-between mb-4"><div class="w-11 h-11 rounded-xl ' + tool.color + ' text-white flex items-center justify-center shadow-sm"><i data-lucide="' + tool.icon + '" class="w-5 h-5"></i></div>' + badge + '</div><h3 class="font-bold text-base mb-1.5">' + escapeHtml(tool.title) + '</h3><p class="text-xs theme-muted leading-relaxed">' + escapeHtml(tool.desc) + '</p></div>';
+                grid.appendChild(card);
+            });
+            refreshIcons();
+        }
+
+        function filterCategory(cat) {
+            showHome();
+            document.querySelectorAll('.category-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+            renderToolsGrid(cat);
+        }
+
+        function showHome() {
+            document.getElementById('home-view').classList.remove('hidden');
+            document.getElementById('workspace-view').classList.add('hidden');
+            activeTool = null;
+            selectedFiles = [];
+            resetBgState();
+        }
+
+        function resetBgState() {
+            aiMaskCanvas = null;
+            bgOriginalCanvas = null;
+            bgUndoStack = [];       // antes, o histórico sobrevivia à troca de imagem
+            lassoPoints = [];
+            lassoMousePos = null;
+            compareSliderPos = 50;
+        }
+
+        function openTool(toolId) {
+            activeTool = TOOLS.find(t => t.id === toolId);
+            if (!activeTool) return;
+            selectedFiles = [];
+            blurBoxes = [];
+            resetBgState();
+            idState.rect = null;
+            deskewState.corners = null;
+            deskewState.preview = null;
+            editorState.paths = []; editorState.rotation = 0; editorState.flipH = false; editorState.flipV = false;
+            editorState.textX = 50; editorState.textY = 85;
+
+            document.getElementById('home-view').classList.add('hidden');
+            document.getElementById('workspace-view').classList.remove('hidden');
+
+            const iconBox = document.getElementById('ws-icon-box');
+            iconBox.className = 'w-16 h-16 rounded-2xl mb-4 flex items-center justify-center text-white shadow-lg ' + activeTool.color;
+            iconBox.innerHTML = '<i data-lucide="' + activeTool.icon + '" class="w-8 h-8"></i>';
+            document.getElementById('ws-title').textContent = activeTool.title;
+            document.getElementById('ws-desc').textContent = activeTool.desc;
+
+            const netWarn = document.getElementById('ws-net-warning');
+            if (activeTool.needsNet) {
+                netWarn.classList.remove('hidden');
+                netWarn.innerHTML = '<strong>Precisa de internet na primeira vez:</strong> as imagens continuam sendo processadas aqui no seu aparelho, mas o modelo de IA (alguns megabytes) é baixado uma vez e fica guardado no cache do navegador.';
+            } else {
+                netWarn.classList.add('hidden');
+            }
+
+            if (toolId === 'html-to-img') {
+                document.getElementById('ws-initial-upload').classList.add('hidden');
+                document.getElementById('ws-studio-layout').classList.remove('hidden');
+                document.getElementById('photo-editor-toolbar').classList.add('hidden');
+                document.getElementById('sidebar-tool-title').textContent = activeTool.sidebarTitle;
+                document.getElementById('ws-execute-label').textContent = activeTool.btnLabel;
+                renderRightSidebar();
+                renderLeftStage();
+            } else {
+                document.getElementById('ws-initial-upload').classList.remove('hidden');
+                document.getElementById('ws-studio-layout').classList.add('hidden');
+            }
+            refreshIcons();
+        }
+
+        function triggerFileInput() { document.getElementById('ws-file-input').click(); }
+        function handleFileSelect(e) { if (e.target.files && e.target.files.length) loadImagesIntoStudio(Array.from(e.target.files)); }
+        function handleInitialDrop(e) {
+            e.preventDefault();
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) loadImagesIntoStudio(Array.from(e.dataTransfer.files));
+        }
+
+        async function loadImagesIntoStudio(files) {
+            const incoming = files.filter(f => f.type.indexOf('image/') === 0);
+            if (!incoming.length) { alert('Nenhum dos arquivos escolhidos é uma imagem.'); return; }
+            if (selectedFiles.length + incoming.length > MAX_FILES) {
+                alert('Limite de ' + MAX_FILES + ' imagens por vez. As excedentes foram ignoradas.');
+            }
+            const room = MAX_FILES - selectedFiles.length;
+            for (const f of incoming.slice(0, Math.max(0, room))) {
+                try {
+                    selectedFiles.push(await readImageFile(f));
+                } catch (err) {
+                    alert('Não consegui abrir "' + f.name + '". O navegador pode não suportar este formato.');
+                }
+            }
+            if (!selectedFiles.length) return;
+
+            const first = selectedFiles[0];
+            resizeState.width = first.width;
+            resizeState.height = first.height;
+            cropState = {
+                width: Math.round(first.width * 0.8), height: Math.round(first.height * 0.8),
+                x: Math.round(first.width * 0.1), y: Math.round(first.height * 0.1)
+            };
+            if (activeTool.id === 'photo-id' && !idState.rect) initIdRect(first);
+            if (activeTool.id === 'deskew' && !deskewState.corners) initDeskewCorners(first);
+
+            document.getElementById('ws-initial-upload').classList.add('hidden');
+            document.getElementById('ws-studio-layout').classList.remove('hidden');
+            document.getElementById('photo-editor-toolbar').classList.toggle('hidden', activeTool.id !== 'editor');
+            document.getElementById('sidebar-tool-title').textContent = activeTool.sidebarTitle;
+            document.getElementById('ws-execute-label').textContent = activeTool.btnLabel;
+            document.getElementById('floating-file-badge').textContent = selectedFiles.length;
+
+            if (activeTool.id === 'removebg') {
+                resetBgState();
+                await prepareRemoveBgPreview(first);
+            }
+
+            renderRightSidebar();
+            renderLeftStage();
+            refreshIcons();
+        }
+
+        function readImageFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onerror = () => reject(new Error('Formato não suportado'));
+                    img.onload = () => {
+                        resolve({
+                            file, img,
+                            width: img.naturalWidth,
+                            height: img.naturalHeight,
+                            sizeMB: (file.size / (1024 * 1024)).toFixed(2),
+                            dataUrl: e.target.result
+                        });
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /* ====================================================================
+           REMOVER FUNDO
+           Correção central: cada imagem do lote é segmentada a partir do SEU
+           próprio arquivo. Antes, o motor de estúdio lia sempre selectedFiles[0],
+           então todas as imagens saíam com o recorte da primeira esticado.
+        ==================================================================== */
+        async function runStudioHdRemoveBg(fileOrBlob, w, h) {
+            if (!window.imglyRemoveBackground) return null;
+            const resultBlob = await window.imglyRemoveBackground(fileOrBlob, {
+                progress: (key, current, total) => {
+                    if (total > 0) setProgressText('IA Estúdio HD processando detalhes (' + Math.round((current / total) * 100) + '%)...');
+                }
+            });
+            return await new Promise((resolve) => {
+                const img = new Image();
+                const url = URL.createObjectURL(resultBlob);
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const c = document.createElement('canvas');
+                    c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(c);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+                img.src = url;
+            });
+        }
+
+        async function runMediapipeRemoveBg(imgElement) {
+            if (!window.SelfieSegmentation) return null;
+            if (!aiSegInstance) {
+                aiSegInstance = new SelfieSegmentation({ locateFile: (file) => mediapipeBase + file });
+                aiSegInstance.setOptions({ modelSelection: 1 });
+            }
+            return await new Promise((resolve) => {
+                aiSegInstance.onResults((results) => {
+                    const w = imgElement.naturalWidth || imgElement.width;
+                    const h = imgElement.naturalHeight || imgElement.height;
+
+                    const maskCanvas = document.createElement('canvas');
+                    maskCanvas.width = w; maskCanvas.height = h;
+                    const maskCtx = maskCanvas.getContext('2d');
+                    maskCtx.filter = 'blur(2px)';
+                    maskCtx.drawImage(results.segmentationMask, 0, 0, w, h);
+                    const maskData = maskCtx.getImageData(0, 0, w, h).data;
+
+                    const mCanvas = document.createElement('canvas');
+                    mCanvas.width = w; mCanvas.height = h;
+                    const mCtx = mCanvas.getContext('2d');
+                    mCtx.drawImage(imgElement, 0, 0, w, h);
+                    const imgData = mCtx.getImageData(0, 0, w, h);
+                    const d = imgData.data;
+                    const cutoff = aiEdgeCutoff;
+                    for (let i = 0; i < d.length; i += 4) {
+                        const maskAlpha = maskData[i];
+                        if (maskAlpha < cutoff) d[i + 3] = 0;
+                        else if (maskAlpha < cutoff + 30) d[i + 3] = Math.round(((maskAlpha - cutoff) / 30) * 255);
+                    }
+                    mCtx.putImageData(imgData, 0, 0);
+                    resolve(mCanvas);
+                });
+                // Nem toda versão do MediaPipe devolve uma Promise aqui.
+                try {
+                    const r = aiSegInstance.send({ image: imgElement });
+                    if (r && typeof r.catch === 'function') r.catch(() => resolve(null));
+                } catch (err) { resolve(null); }
+                // Se o motor travar, não deixa a tela presa para sempre.
+                setTimeout(() => resolve(null), 25000);
+            });
+        }
+
+        // Recebe o ITEM completo (arquivo + elemento de imagem), nunca o índice 0 fixo.
+        async function segmentItem(item) {
+            const w = item.width, h = item.height;
+            if (removeBgMode === 'studio-hd') {
+                try {
+                    const hd = await runStudioHdRemoveBg(item.file, w, h);
+                    if (hd) return hd;
+                } catch (err) { console.warn('IA Estúdio HD falhou, tentando IA rápida:', err); }
+            }
+            if (removeBgMode === 'studio-hd' || removeBgMode === 'ai') {
+                try {
+                    const fast = await runMediapipeRemoveBg(item.img);
+                    if (fast) return fast;
+                } catch (err) { console.warn('IA rápida falhou, caindo para flood-fill:', err); }
+            }
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(item.img, 0, 0);
+            applySmartFloodRemoveBg(ctx, w, h, removeBgTolerance);
+            return c;
+        }
+
+        async function prepareRemoveBgPreview(item) {
+            const prog = document.getElementById('ws-progress-area');
+            prog.classList.remove('hidden');
+            setProgressText('Analisando a imagem e removendo o fundo...');
+            try {
+                aiMaskCanvas = await segmentItem(item);
+            } catch (err) {
+                console.warn(err);
+                alert('A remoção automática falhou. Você ainda pode recortar manualmente com o laço e a borracha.' + String.fromCharCode(10) + String.fromCharCode(10) + 'Detalhe: ' + err.message);
+                aiMaskCanvas = document.createElement('canvas');
+                aiMaskCanvas.width = item.width; aiMaskCanvas.height = item.height;
+                aiMaskCanvas.getContext('2d').drawImage(item.img, 0, 0);
+            } finally {
+                prog.classList.add('hidden');
+            }
+            bgOriginalCanvas = document.createElement('canvas');
+            bgOriginalCanvas.width = item.width; bgOriginalCanvas.height = item.height;
+            bgOriginalCanvas.getContext('2d').drawImage(item.img, 0, 0);
+            bgUndoStack = [];
+        }
+
+        function saveBgUndoState() {
+            if (!aiMaskCanvas) return;
+            const snap = document.createElement('canvas');
+            snap.width = aiMaskCanvas.width; snap.height = aiMaskCanvas.height;
+            snap.getContext('2d').drawImage(aiMaskCanvas, 0, 0);
+            bgUndoStack.push(snap);
+            if (bgUndoStack.length > 15) bgUndoStack.shift();
+        }
+
+        function undoLastBgAction() {
+            if (!bgUndoStack.length || !aiMaskCanvas) return;
+            const prev = bgUndoStack.pop();
+            const ctx = aiMaskCanvas.getContext('2d');
+            ctx.clearRect(0, 0, aiMaskCanvas.width, aiMaskCanvas.height);
+            ctx.drawImage(prev, 0, 0);
+            lassoPoints = [];
+            renderLeftStage();
+            renderRightSidebar();
+        }
+
+        // Corte do laço com suavização de borda (feathering): sem isso o recorte
+        // manual ficava com serrilha dura, bem diferente do resto da silhueta.
+        function closeAndCutLassoPolygon() {
+            if (lassoPoints.length < 3 || !aiMaskCanvas) { lassoPoints = []; renderLeftStage(); return; }
+            saveBgUndoState();
+            const w = aiMaskCanvas.width, h = aiMaskCanvas.height;
+            const stencil = document.createElement('canvas');
+            stencil.width = w; stencil.height = h;
+            const sctx = stencil.getContext('2d');
+            if (bgFeather > 0) sctx.filter = 'blur(' + bgFeather + 'px)';
+            sctx.fillStyle = '#000';
+            sctx.beginPath();
+            sctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+            for (let i = 1; i < lassoPoints.length; i++) sctx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
+            sctx.closePath();
+            sctx.fill();
+
+            const mCtx = aiMaskCanvas.getContext('2d');
+            mCtx.save();
+            mCtx.globalCompositeOperation = 'destination-out';
+            mCtx.drawImage(stencil, 0, 0);
+            mCtx.restore();
+
+            lassoPoints = [];
+            lassoMousePos = null;
+            renderLeftStage();
+            renderRightSidebar();
+        }
+
+        function paintBgBrush(imgX, imgY, radius, restore) {
+            if (!aiMaskCanvas) return;
+            const ctx = aiMaskCanvas.getContext('2d');
+            ctx.save();
+            if (restore && bgOriginalCanvas) {
+                // Pincel de restauração: devolve o pedaço que a IA apagou demais.
+                ctx.beginPath();
+                ctx.arc(imgX, imgY, radius, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(bgOriginalCanvas, 0, 0);
+            } else {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                ctx.arc(imgX, imgY, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // Flood-fill a partir das 4 bordas: nunca apaga pixels escuros no meio do rosto.
+        function applySmartFloodRemoveBg(ctx, w, h, tolerance) {
+            const imgData = ctx.getImageData(0, 0, w, h);
+            const d = imgData.data;
+            const visited = new Uint8Array(w * h);
+            const queue = [];
+            const bgR = d[0], bgG = d[1], bgB = d[2];
+            const maxDist = tolerance * 1.9;
+
+            for (let x = 0; x < w; x++) { queue.push(x); queue.push((h - 1) * w + x); visited[x] = 1; visited[(h - 1) * w + x] = 1; }
+            for (let y = 0; y < h; y++) { queue.push(y * w); queue.push(y * w + (w - 1)); visited[y * w] = 1; visited[y * w + (w - 1)] = 1; }
+
+            while (queue.length > 0) {
+                const idx = queue.pop();
+                const p = idx * 4;
+                const dist = Math.sqrt(Math.pow(d[p] - bgR, 2) + Math.pow(d[p + 1] - bgG, 2) + Math.pow(d[p + 2] - bgB, 2));
+                if (dist <= maxDist) {
+                    d[p + 3] = 0;
+                    const x = idx % w, y = (idx - x) / w;
+                    if (x > 0 && !visited[idx - 1]) { visited[idx - 1] = 1; queue.push(idx - 1); }
+                    if (x < w - 1 && !visited[idx + 1]) { visited[idx + 1] = 1; queue.push(idx + 1); }
+                    if (y > 0 && !visited[idx - w]) { visited[idx - w] = 1; queue.push(idx - w); }
+                    if (y < h - 1 && !visited[idx + w]) { visited[idx + w] = 1; queue.push(idx + w); }
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        // Aplica a cor de fundo escolhida (ex.: branco para foto 3x4 de documento).
+        function compositeBackground(cutCanvas, color) {
+            if (!color) return cutCanvas;
+            const out = document.createElement('canvas');
+            out.width = cutCanvas.width; out.height = cutCanvas.height;
+            const ctx = out.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, out.width, out.height);
+            ctx.drawImage(cutCanvas, 0, 0);
+            return out;
+        }
+
+        /* ==================== PALCO VISUAL ==================== */
+        function renderLeftStage() {
+            const stage = document.getElementById('studio-visual-stage');
+            stage.innerHTML = '';
+
+            if (activeTool.id === 'html-to-img') {
+                const wrap = document.createElement('div');
+                wrap.className = 'w-full max-w-2xl theme-surface border rounded-2xl p-6 shadow-lg';
+                wrap.innerHTML = '<label class="block text-xs font-bold uppercase mb-2">Pré-visualização (é exatamente isto que vira PNG):</label>';
+                const box = document.createElement('div');
+                box.id = 'html-render-box';
+                box.className = 'p-8 rounded-xl text-white shadow-inner';
+                box.style.background = 'linear-gradient(135deg,#2563eb,#3730a3)';
+                box.innerHTML = htmlSource;
+                wrap.appendChild(box);
+                stage.appendChild(wrap);
+                return;
+            }
+
+            if (!selectedFiles.length) return;
+            const first = selectedFiles[0];
+
+            if (activeTool.id === 'crop') { renderCropStage(stage, first); return; }
+            if (activeTool.id === 'photo-id') { renderIdStage(stage, first); return; }
+            if (activeTool.id === 'deskew') { renderDeskewStage(stage, first); return; }
+
+            if (['editor', 'meme', 'watermark', 'blur-face'].includes(activeTool.id)) {
+                renderEditorStage(stage, first);
+                return;
+            }
+
+            if (activeTool.id === 'upscale' || activeTool.id === 'removebg') {
+                renderBgOrUpscaleStage(stage, first);
+                return;
+            }
+
+            selectedFiles.forEach((item, idx) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex flex-col items-center';
+
+                const topPill = document.createElement('div');
+                topPill.className = 'px-3 py-1 rounded-md bg-slate-800 text-white text-[11px] font-extrabold mb-2 shadow';
+                topPill.textContent = item.sizeMB + ' MB - ' + item.width + 'x' + item.height;
+                wrapper.appendChild(topPill);
+
+                const card = document.createElement('div');
+                card.className = 'theme-surface rounded-xl p-3.5 shadow-md border w-52 flex flex-col items-center relative group';
+
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.className = 'absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-200 hover:bg-red-500 hover:text-white text-slate-700 text-xs font-bold flex items-center justify-center transition';
+                delBtn.textContent = '✕';
+                delBtn.setAttribute('aria-label', 'Remover imagem');
+                delBtn.onclick = () => {
+                    selectedFiles.splice(idx, 1);
+                    if (!selectedFiles.length) openTool(activeTool.id);
+                    else { document.getElementById('floating-file-badge').textContent = selectedFiles.length; renderLeftStage(); }
+                };
+                card.appendChild(delBtn);
+
+                const imgBox = document.createElement('div');
+                imgBox.className = 'w-40 h-40 rounded overflow-hidden flex items-center justify-center mb-2.5 bg-slate-100';
+                const thumb = document.createElement('img');
+                thumb.src = item.dataUrl;
+                thumb.alt = item.file.name;
+                thumb.className = 'max-w-full max-h-full object-contain';
+                if (activeTool.id === 'rotate') thumb.style.transform = 'rotate(' + rotateAngle + 'deg)';
+                imgBox.appendChild(thumb);
+                card.appendChild(imgBox);
+
+                const nameP = document.createElement('p');
+                nameP.className = 'text-xs theme-muted truncate w-full text-center mb-1';
+                nameP.textContent = item.file.name;
+                card.appendChild(nameP);
+
+                if (activeTool.id === 'resize') {
+                    const targetDim = calcTargetDimensions(item);
+                    const dimRow = document.createElement('div');
+                    dimRow.className = 'flex items-center gap-1 text-[10px] font-bold';
+                    dimRow.innerHTML = '<span class="px-1.5 py-0.5 rounded bg-slate-400 text-white">' + item.width + ' x ' + item.height + '</span><span>➔</span><span class="px-1.5 py-0.5 rounded bg-[#4d90fe] text-white">' + targetDim.w + ' x ' + targetDim.h + '</span>';
+                    card.appendChild(dimRow);
+                }
+
+                wrapper.appendChild(card);
+                stage.appendChild(wrapper);
+            });
+        }
+
+        /* ---------- RECORTE COM ALÇAS ARRASTÁVEIS ---------- */
+        function renderCropStage(stage, first) {
+            const wrap = document.createElement('div');
+            wrap.className = 'theme-surface p-4 rounded-xl shadow-lg border inline-block';
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 520 / Math.max(first.width, first.height));
+            canvas.width = Math.round(first.width * scale);
+            canvas.height = Math.round(first.height * scale);
+            canvas.className = 'checkerboard rounded border draw-surface';
+            canvas.style.cursor = 'move';
+            drawCropOverlay(canvas, first, scale);
+
+            const HANDLE = 14;
+            let mode = null, startPt = null, startCrop = null;
+
+            function hitHandle(cx, cy) {
+                const x = cropState.x * scale, y = cropState.y * scale;
+                const w = cropState.width * scale, h = cropState.height * scale;
+                const corners = { nw:[x, y], ne:[x + w, y], sw:[x, y + h], se:[x + w, y + h] };
+                for (const k in corners) {
+                    if (Math.abs(cx - corners[k][0]) < HANDLE && Math.abs(cy - corners[k][1]) < HANDLE) return k;
+                }
+                if (cx > x && cx < x + w && cy > y && cy < y + h) return 'move';
+                return null;
+            }
+
+            attachDrag(canvas, {
+                hover: (p, e, active) => {
+                    if (active) return;
+                    const hit = hitHandle(p.cssX * (canvas.width / p.rect.width), p.cssY * (canvas.height / p.rect.height));
+                    canvas.style.cursor = hit === 'move' ? 'move' : (hit ? (hit === 'nw' || hit === 'se' ? 'nwse-resize' : 'nesw-resize') : 'default');
+                },
+                start: (p) => {
+                    const cx = p.cssX * (canvas.width / p.rect.width), cy = p.cssY * (canvas.height / p.rect.height);
+                    mode = hitHandle(cx, cy);
+                    startPt = { x: cx / scale, y: cy / scale };
+                    startCrop = Object.assign({}, cropState);
+                },
+                move: (p) => {
+                    if (!mode) return;
+                    const cx = p.cssX * (canvas.width / p.rect.width), cy = p.cssY * (canvas.height / p.rect.height);
+                    const dx = cx / scale - startPt.x, dy = cy / scale - startPt.y;
+                    if (mode === 'move') {
+                        cropState.x = clamp(Math.round(startCrop.x + dx), 0, first.width - cropState.width);
+                        cropState.y = clamp(Math.round(startCrop.y + dy), 0, first.height - cropState.height);
+                    } else {
+                        let nx = startCrop.x, ny = startCrop.y, nw = startCrop.width, nh = startCrop.height;
+                        if (mode.indexOf('w') >= 0) { nx = startCrop.x + dx; nw = startCrop.width - dx; }
+                        if (mode.indexOf('e') >= 0) { nw = startCrop.width + dx; }
+                        if (mode.indexOf('n') >= 0) { ny = startCrop.y + dy; nh = startCrop.height - dy; }
+                        if (mode.indexOf('s') >= 0) { nh = startCrop.height + dy; }
+                        if (nw >= 20 && nx >= 0 && nx + nw <= first.width) { cropState.x = Math.round(nx); cropState.width = Math.round(nw); }
+                        if (nh >= 20 && ny >= 0 && ny + nh <= first.height) { cropState.y = Math.round(ny); cropState.height = Math.round(nh); }
+                    }
+                    drawCropOverlay(canvas, first, scale);
+                    syncCropInputs();
+                },
+                end: () => { mode = null; }
+            });
+
+            wrap.appendChild(canvas);
+            const hint = document.createElement('p');
+            hint.className = 'text-[11px] theme-muted text-center mt-2';
+            hint.textContent = 'Arraste dentro do retângulo para mover, ou puxe um canto para redimensionar.';
+            wrap.appendChild(hint);
+            stage.appendChild(wrap);
+        }
+
+        function drawCropOverlay(canvas, first, scale) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(first.img, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cx = cropState.x * scale, cy = cropState.y * scale;
+            const cw = cropState.width * scale, ch = cropState.height * scale;
+            ctx.save();
+            ctx.beginPath(); ctx.rect(cx, cy, cw, ch); ctx.clip();
+            ctx.drawImage(first.img, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            ctx.strokeStyle = '#4d90fe'; ctx.lineWidth = 2.5;
+            ctx.strokeRect(cx, cy, cw, ch);
+            ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+            ctx.strokeRect(cx + cw / 3, cy, cw / 3, ch);
+            ctx.strokeRect(cx, cy + ch / 3, cw, ch / 3);
+            ctx.setLineDash([]);
+
+            [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(pt => {
+                ctx.fillStyle = '#4d90fe';
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(pt[0], pt[1], 7, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+            });
+        }
+
+        /* ---------- FOTO 3x4 COM GABARITO BIOMÉTRICO ---------- */
+        function renderIdStage(stage, first) {
+            if (!idState.rect) initIdRect(first);
+            fixIdRectRatio(first);
+
+            const wrap = document.createElement('div');
+            wrap.className = 'theme-surface p-4 rounded-xl shadow-lg border inline-block';
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 520 / Math.max(first.width, first.height));
+            canvas.width = Math.round(first.width * scale);
+            canvas.height = Math.round(first.height * scale);
+            canvas.className = 'rounded border draw-surface';
+            canvas.style.cursor = 'move';
+            drawIdOverlay(canvas, first, scale);
+
+            const HANDLE = 14;
+            let mode = null, startPt = null, startRect = null;
+            function hit(cx, cy) {
+                const r = idState.rect;
+                const x = r.x * scale, y = r.y * scale, w = r.w * scale, h = r.h * scale;
+                const corners = { nw:[x, y], ne:[x + w, y], sw:[x, y + h], se:[x + w, y + h] };
+                for (const k in corners) {
+                    if (Math.abs(cx - corners[k][0]) < HANDLE && Math.abs(cy - corners[k][1]) < HANDLE) return k;
+                }
+                if (cx > x && cx < x + w && cy > y && cy < y + h) return 'move';
+                return null;
+            }
+
+            attachDrag(canvas, {
+                hover: (p, e, active) => {
+                    if (active) return;
+                    const k = hit(p.cssX * (canvas.width / p.rect.width), p.cssY * (canvas.height / p.rect.height));
+                    canvas.style.cursor = k === 'move' ? 'move' : (k ? 'nwse-resize' : 'default');
+                },
+                start: (p) => {
+                    const cx = p.cssX * (canvas.width / p.rect.width), cy = p.cssY * (canvas.height / p.rect.height);
+                    mode = hit(cx, cy);
+                    startPt = { x: cx / scale, y: cy / scale };
+                    startRect = Object.assign({}, idState.rect);
+                },
+                move: (p) => {
+                    if (!mode) return;
+                    const cx = p.cssX * (canvas.width / p.rect.width), cy = p.cssY * (canvas.height / p.rect.height);
+                    const dx = cx / scale - startPt.x, dy = cy / scale - startPt.y;
+                    const r = idState.rect;
+                    const t = idTargetSize();
+                    const ratio = t.w / t.h;
+                    if (mode === 'move') {
+                        r.x = clamp(Math.round(startRect.x + dx), 0, first.width - r.w);
+                        r.y = clamp(Math.round(startRect.y + dy), 0, first.height - r.h);
+                    } else {
+                        // A proporção fica travada: só a largura responde ao arraste.
+                        let nw = startRect.w + (mode.indexOf('e') >= 0 ? dx : -dx);
+                        nw = clamp(nw, 60, Math.min(first.width, first.height * ratio));
+                        let nh = nw / ratio;
+                        let nx = (mode.indexOf('w') >= 0) ? startRect.x + (startRect.w - nw) : startRect.x;
+                        let ny = (mode.indexOf('n') >= 0) ? startRect.y + (startRect.h - nh) : startRect.y;
+                        nx = clamp(nx, 0, first.width - nw);
+                        ny = clamp(ny, 0, first.height - nh);
+                        r.x = Math.round(nx); r.y = Math.round(ny);
+                        r.w = Math.round(nw); r.h = Math.round(nh);
+                    }
+                    drawIdOverlay(canvas, first, scale);
+                },
+                end: () => { mode = null; }
+            });
+
+            wrap.appendChild(canvas);
+            const hint = document.createElement('p');
+            hint.className = 'text-[11px] theme-muted text-center mt-2 max-w-[520px]';
+            hint.textContent = 'Encaixe o topo da cabeça na linha verde e o queixo na linha vermelha. Os olhos devem ficar sobre a linha tracejada azul.';
+            wrap.appendChild(hint);
+            stage.appendChild(wrap);
+        }
+
+        // As proporções seguem o padrão de foto de documento: a cabeça ocupa
+        // cerca de 70% da altura e os olhos ficam a ~45% do topo.
+        function drawIdOverlay(canvas, first, scale) {
+            const ctx = canvas.getContext('2d');
+            const r = idState.rect;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(first.img, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const x = r.x * scale, y = r.y * scale, w = r.w * scale, h = r.h * scale;
+            ctx.save();
+            ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+            ctx.drawImage(first.img, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 2.5;
+            ctx.strokeRect(x, y, w, h);
+
+            if (idState.guides) {
+                const headTop = y + h * 0.10;
+                const chin = y + h * 0.80;
+                const eyes = y + h * 0.45;
+                ctx.save();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#10b981';
+                ctx.beginPath(); ctx.moveTo(x, headTop); ctx.lineTo(x + w, headTop); ctx.stroke();
+                ctx.strokeStyle = '#ef4444';
+                ctx.beginPath(); ctx.moveTo(x, chin); ctx.lineTo(x + w, chin); ctx.stroke();
+                ctx.setLineDash([5, 4]);
+                ctx.strokeStyle = '#60a5fa';
+                ctx.beginPath(); ctx.moveTo(x, eyes); ctx.lineTo(x + w, eyes); ctx.stroke();
+                ctx.setLineDash([]);
+                // Oval de referência do rosto.
+                ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+                ctx.beginPath();
+                ctx.ellipse(x + w / 2, (headTop + chin) / 2, w * 0.30, (chin - headTop) / 2, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(pt => {
+                ctx.fillStyle = '#6366f1'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(pt[0], pt[1], 7, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+            });
+        }
+
+        /* ---------- ENDIREITAR DOCUMENTO ---------- */
+        function renderDeskewStage(stage, first) {
+            if (!deskewState.corners) initDeskewCorners(first);
+
+            const container = document.createElement('div');
+            container.className = 'flex flex-col lg:flex-row items-start gap-5';
+
+            const wrap = document.createElement('div');
+            wrap.className = 'theme-surface p-4 rounded-xl shadow-lg border inline-block';
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 500 / Math.max(first.width, first.height));
+            canvas.width = Math.round(first.width * scale);
+            canvas.height = Math.round(first.height * scale);
+            canvas.className = 'rounded border draw-surface';
+            drawDeskewOverlay(canvas, first, scale);
+
+            let dragIdx = -1;
+            function nearest(cx, cy) {
+                let best = -1, bestD = 22;
+                deskewState.corners.forEach((pt, i) => {
+                    const d = Math.hypot(cx - pt.x * scale, cy - pt.y * scale);
+                    if (d < bestD) { bestD = d; best = i; }
+                });
+                return best;
+            }
+
+            attachDrag(canvas, {
+                hover: (p, e, active) => {
+                    if (active) return;
+                    const i = nearest(p.cssX * (canvas.width / p.rect.width), p.cssY * (canvas.height / p.rect.height));
+                    canvas.style.cursor = i >= 0 ? 'grab' : 'default';
+                },
+                start: (p) => {
+                    dragIdx = nearest(p.cssX * (canvas.width / p.rect.width), p.cssY * (canvas.height / p.rect.height));
+                },
+                move: (p) => {
+                    if (dragIdx < 0) return;
+                    const cx = p.cssX * (canvas.width / p.rect.width), cy = p.cssY * (canvas.height / p.rect.height);
+                    deskewState.corners[dragIdx] = {
+                        x: clamp(cx / scale, 0, first.width),
+                        y: clamp(cy / scale, 0, first.height)
+                    };
+                    drawDeskewOverlay(canvas, first, scale);
+                },
+                end: () => { if (dragIdx >= 0) { dragIdx = -1; updateDeskewPreview(first); } }
+            });
+
+            wrap.appendChild(canvas);
+            const hint = document.createElement('p');
+            hint.className = 'text-[11px] theme-muted text-center mt-2 max-w-[500px]';
+            hint.textContent = 'Arraste cada bolinha para o canto correspondente do papel. A ordem é: superior esquerdo, superior direito, inferior direito, inferior esquerdo.';
+            wrap.appendChild(hint);
+            container.appendChild(wrap);
+
+            const prevBox = document.createElement('div');
+            prevBox.className = 'theme-surface p-4 rounded-xl shadow-lg border flex flex-col items-center';
+            prevBox.innerHTML = '<p class="text-xs font-extrabold mb-2 uppercase tracking-wide">Prévia do resultado</p>';
+            const prevCanvas = document.createElement('canvas');
+            prevCanvas.id = 'deskew-preview';
+            prevCanvas.className = 'border rounded bg-white max-w-[260px] h-auto';
+            prevBox.appendChild(prevCanvas);
+            const prevHint = document.createElement('p');
+            prevHint.className = 'text-[11px] theme-muted text-center mt-2 max-w-[260px]';
+            prevHint.textContent = 'A prévia é de baixa resolução e atualiza quando você solta o canto. O arquivo final sai em alta.';
+            prevBox.appendChild(prevHint);
+            container.appendChild(prevBox);
+
+            stage.appendChild(container);
+            updateDeskewPreview(first);
+        }
+
+        function drawDeskewOverlay(canvas, first, scale) {
+            const ctx = canvas.getContext('2d');
+            const pts = deskewState.corners;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(first.img, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x * scale, pts[0].y * scale);
+            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x * scale, pts[i].y * scale);
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(first.img, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x * scale, pts[0].y * scale);
+            for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x * scale, pts[i].y * scale);
+            ctx.closePath();
+            ctx.lineWidth = 2.5; ctx.strokeStyle = '#14b8a6';
+            ctx.stroke();
+            ctx.restore();
+
+            const labels = ['1', '2', '3', '4'];
+            pts.forEach((pt, i) => {
+                ctx.beginPath();
+                ctx.fillStyle = '#14b8a6'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.arc(pt.x * scale, pt.y * scale, 9, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 11px Inter, sans-serif';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(labels[i], pt.x * scale, pt.y * scale);
+            });
+        }
+
+        function updateDeskewPreview(first) {
+            const prev = document.getElementById('deskew-preview');
+            if (!prev) return;
+            try {
+                // Prévia barata: trabalha numa cópia pequena da foto.
+                const small = itemToCanvas(first, 420);
+                const s = small.width / first.width;
+                const quad = deskewState.corners.map(p => ({ x: p.x * s, y: p.y * s }));
+                const size = deskewOutputSize(quad);
+                const maxPrev = 260;
+                const k = Math.min(1, maxPrev / Math.max(size.w, size.h));
+                const out = warpPerspective(small, quad, Math.max(20, Math.round(size.w * k)), Math.max(20, Math.round(size.h * k)));
+                if (deskewState.sharpen) applyScannerFilter(out);
+                prev.width = out.width; prev.height = out.height;
+                prev.getContext('2d').drawImage(out, 0, 0);
+            } catch (e) {
+                const ctx = prev.getContext('2d');
+                prev.width = 200; prev.height = 80;
+                ctx.fillStyle = '#fee2e2'; ctx.fillRect(0, 0, 200, 80);
+                ctx.fillStyle = '#b91c1c'; ctx.font = 'bold 11px Inter, sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('Cantos inválidos', 100, 44);
+            }
+        }
+
+        function syncCropInputs() {
+            const map = { 'crop-w':cropState.width, 'crop-h':cropState.height, 'crop-x':cropState.x, 'crop-y':cropState.y };
+            Object.keys(map).forEach(id => { const el = document.getElementById(id); if (el) el.value = map[id]; });
+        }
+
+        /* ---------- EDITOR / MEME / MARCA D'ÁGUA / BLUR ---------- */
+        function renderEditorStage(stage, first) {
+            const wrap = document.createElement('div');
+            wrap.className = 'checkerboard p-6 rounded-xl shadow-inner border flex items-center justify-center overflow-auto max-w-full';
+            const canvas = document.createElement('canvas');
+            const swap = (editorState.rotation === 90 || editorState.rotation === 270);
+            const baseW = swap ? first.height : first.width;
+            const baseH = swap ? first.width : first.height;
+            const scale = (editorState.zoom / 100) * Math.min(1, 540 / Math.max(baseW, baseH));
+            canvas.width = Math.round(baseW * scale);
+            canvas.height = Math.round(baseH * scale);
+            canvas.className = 'shadow-2xl bg-white draw-surface';
+            renderPreviewOnCanvas(canvas, first, scale);
+
+            const toImg = (p) => ({
+                x: p.cssX * (canvas.width / p.rect.width) / scale,
+                y: p.cssY * (canvas.height / p.rect.height) / scale
+            });
+
+            if (activeTool.id === 'editor' && editorState.tab === 'draw') {
+                canvas.style.cursor = 'crosshair';
+                attachDrag(canvas, {
+                    start: (p) => {
+                        const i = toImg(p);
+                        editorState.paths.push({ color: editorState.brushColor, size: editorState.brushSize, points: [i] });
+                    },
+                    move: (p) => {
+                        const cur = editorState.paths[editorState.paths.length - 1];
+                        if (!cur) return;
+                        cur.points.push(toImg(p));
+                        renderPreviewOnCanvas(canvas, first, scale);
+                    }
+                });
+            } else if (activeTool.id === 'editor' && (editorState.tab === 'text' || editorState.tab === 'stickers')) {
+                // Arrastar o texto e o sticker direto na foto.
+                canvas.style.cursor = 'grab';
+                attachDrag(canvas, {
+                    move: (p) => {
+                        const px = clamp((p.cssX / p.rect.width) * 100, 2, 98);
+                        const py = clamp((p.cssY / p.rect.height) * 100, 4, 99);
+                        if (editorState.tab === 'text') { editorState.textX = Math.round(px); editorState.textY = Math.round(py); }
+                        else { editorState.stickerX = Math.round(px); editorState.stickerY = Math.round(py); }
+                        renderPreviewOnCanvas(canvas, first, scale);
+                        syncEditorLabels();
+                    }
+                });
+            } else if (activeTool.id === 'blur-face') {
+                // Agora desenha-se a área a desfocar, em vez de um quadrado fixo de 120px.
+                canvas.style.cursor = 'crosshair';
+                let start = null;
+                attachDrag(canvas, {
+                    start: (p) => { start = toImg(p); },
+                    move: (p) => {
+                        if (!start) return;
+                        const cur = toImg(p);
+                        renderPreviewOnCanvas(canvas, first, scale);
+                        const ctx = canvas.getContext('2d');
+                        ctx.save();
+                        ctx.strokeStyle = '#4d90fe'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+                        ctx.strokeRect(Math.min(start.x, cur.x) * scale, Math.min(start.y, cur.y) * scale, Math.abs(cur.x - start.x) * scale, Math.abs(cur.y - start.y) * scale);
+                        ctx.restore();
+                    },
+                    end: (p) => {
+                        if (!start) return;
+                        const cur = toImg(p);
+                        const w = Math.abs(cur.x - start.x), h = Math.abs(cur.y - start.y);
+                        if (w > 8 && h > 8) {
+                            blurBoxes.push({ x:Math.min(start.x, cur.x), y:Math.min(start.y, cur.y), w, h });
+                        } else {
+                            // Toque simples: caixa proporcional ao tamanho da imagem.
+                            const side = Math.max(40, Math.min(first.width, first.height) * 0.18);
+                            blurBoxes.push({ x:cur.x - side / 2, y:cur.y - side / 2, w:side, h:side });
+                        }
+                        start = null;
+                        renderLeftStage();
+                        renderRightSidebar();
+                    }
+                });
+            }
+
+            wrap.appendChild(canvas);
+            stage.appendChild(wrap);
+        }
+
+        /* ---------- REMOVER FUNDO / AMPLIAR ---------- */
+        function renderBgOrUpscaleStage(stage, first) {
+            const isBg = activeTool.id === 'removebg';
+            const container = document.createElement('div');
+            container.className = 'flex flex-col items-center w-full';
+
+            const topBar = document.createElement('div');
+            topBar.className = 'theme-surface border rounded-xl px-4 py-2 mb-3 shadow-sm text-xs font-bold flex flex-wrap items-center gap-3';
+            if (isBg) {
+                topBar.innerHTML = '<span>🔍 Zoom:</span>' +
+                    '<button type="button" onclick="VJ.zoomBg(-25)" class="w-7 h-7 rounded bg-slate-200 text-slate-800 font-extrabold">−</button>' +
+                    '<span class="text-[#4d90fe] w-12 text-center">' + bgZoom + '%</span>' +
+                    '<button type="button" onclick="VJ.zoomBg(25)" class="w-7 h-7 rounded bg-slate-200 text-slate-800 font-extrabold">+</button>' +
+                    '<button type="button" onclick="VJ.zoomBg(0)" class="px-2 py-1 rounded theme-subtle border text-[11px]">100%</button>' +
+                    (bgManualTool === 'lasso' ? '<span class="px-2.5 py-1 rounded bg-blue-500/10 text-[#4d90fe]">✂️ Toque ponto a ponto ao redor do que quer apagar (duplo toque ou toque no 1º ponto para cortar)</span>' : '') +
+                    (selectedFiles.length > 1 ? '<span class="px-2.5 py-1 rounded bg-amber-500/10 text-amber-700">Ajustes manuais valem só para esta imagem; as outras ' + (selectedFiles.length - 1) + ' usam a IA automática</span>' : '');
+            } else {
+                topBar.innerHTML = '<span>' + escapeHtml(first.file.name) + '</span>';
+            }
+            container.appendChild(topBar);
+
+            const scrollWrap = document.createElement('div');
+            scrollWrap.className = 'max-w-full max-h-[70vh] overflow-auto p-3 border rounded-2xl theme-subtle flex items-center justify-center';
+
+            const baseScale = Math.min(1, 480 / Math.max(first.width, first.height));
+            const scale = baseScale * (isBg ? (bgZoom / 100) : 1);
+            const dispW = Math.round(first.width * scale), dispH = Math.round(first.height * scale);
+
+            const compBox = document.createElement('div');
+            compBox.className = 'relative rounded-xl overflow-hidden shadow-2xl border checkerboard select-none shrink-0 draw-surface';
+            compBox.style.width = dispW + 'px'; compBox.style.height = dispH + 'px';
+            if (isBg && bgManualTool !== 'none') compBox.style.cursor = 'crosshair';
+
+            if (isBg && !aiMaskCanvas) {
+                aiMaskCanvas = document.createElement('canvas');
+                aiMaskCanvas.width = first.width; aiMaskCanvas.height = first.height;
+                aiMaskCanvas.getContext('2d').drawImage(first.img, 0, 0);
+            }
+
+            const afterCanvas = document.createElement('canvas');
+            afterCanvas.width = dispW; afterCanvas.height = dispH;
+            afterCanvas.className = 'absolute inset-0';
+            const aCtx = afterCanvas.getContext('2d');
+            function paintAfter() {
+                aCtx.clearRect(0, 0, dispW, dispH);
+                if (isBg && bgFillColor) { aCtx.fillStyle = bgFillColor; aCtx.fillRect(0, 0, dispW, dispH); }
+                aCtx.drawImage(isBg && aiMaskCanvas ? aiMaskCanvas : first.img, 0, 0, dispW, dispH);
+            }
+            paintAfter();
+
+            const overlayCanvas = document.createElement('canvas');
+            overlayCanvas.width = dispW; overlayCanvas.height = dispH;
+            overlayCanvas.className = 'absolute inset-0 pointer-events-none z-20';
+            const oCtx = overlayCanvas.getContext('2d');
+
+            function drawLassoOverlay() {
+                oCtx.clearRect(0, 0, dispW, dispH);
+                if (!isBg || bgManualTool !== 'lasso' || !lassoPoints.length) return;
+                const sX = dispW / first.width, sY = dispH / first.height;
+                oCtx.save();
+                oCtx.fillStyle = 'rgba(229, 50, 45, 0.22)';
+                oCtx.beginPath();
+                oCtx.moveTo(lassoPoints[0].x * sX, lassoPoints[0].y * sY);
+                for (let i = 1; i < lassoPoints.length; i++) oCtx.lineTo(lassoPoints[i].x * sX, lassoPoints[i].y * sY);
+                if (lassoMousePos) oCtx.lineTo(lassoMousePos.x * sX, lassoMousePos.y * sY);
+                oCtx.closePath();
+                oCtx.fill();
+                oCtx.lineWidth = 2;
+                oCtx.strokeStyle = '#ffffff';
+                oCtx.stroke();
+                oCtx.setLineDash([6, 5]);
+                oCtx.strokeStyle = '#1e293b';
+                oCtx.stroke();
+                oCtx.setLineDash([]);
+                lassoPoints.forEach((pt, idx) => {
+                    oCtx.beginPath();
+                    oCtx.fillStyle = idx === 0 ? '#10b981' : '#4d90fe';
+                    oCtx.strokeStyle = '#ffffff';
+                    oCtx.lineWidth = 2;
+                    oCtx.arc(pt.x * sX, pt.y * sY, idx === 0 ? 7 : 4.5, 0, Math.PI * 2);
+                    oCtx.fill(); oCtx.stroke();
+                });
+                oCtx.restore();
+            }
+            drawLassoOverlay();
+
+            const beforeCanvas = document.createElement('canvas');
+            beforeCanvas.width = dispW; beforeCanvas.height = dispH;
+            const showCurtain = (!isBg || bgManualTool === 'none');
+            beforeCanvas.className = 'absolute inset-0 ' + (showCurtain ? '' : 'hidden');
+            beforeCanvas.style.clipPath = 'inset(0 ' + (100 - compareSliderPos) + '% 0 0)';
+            beforeCanvas.getContext('2d').drawImage(first.img, 0, 0, dispW, dispH);
+
+            const divider = document.createElement('div');
+            divider.className = 'absolute top-0 bottom-0 w-0.5 bg-white shadow cursor-ew-resize flex items-center justify-center z-10 ' + (showCurtain ? '' : 'hidden');
+            divider.style.left = compareSliderPos + '%';
+            divider.innerHTML = '<div class="w-7 h-7 rounded-full bg-black/60 text-white text-xs flex items-center justify-center border border-white">◄►</div>';
+
+            const toImg = (p) => ({
+                x: p.cssX * (first.width / p.rect.width),
+                y: p.cssY * (first.height / p.rect.height)
+            });
+
+            attachDrag(compBox, {
+                start: (p) => {
+                    const i = toImg(p);
+                    if (isBg && bgManualTool === 'lasso') {
+                        if (lassoPoints.length >= 3) {
+                            const d0 = Math.hypot(i.x - lassoPoints[0].x, i.y - lassoPoints[0].y) * (p.rect.width / first.width);
+                            if (d0 < 16) { closeAndCutLassoPolygon(); return; }
+                        }
+                        lassoPoints.push(i);
+                        drawLassoOverlay();
+                        return;
+                    }
+                    if (isBg && (bgManualTool === 'brush' || bgManualTool === 'restore')) {
+                        saveBgUndoState();
+                        paintBgBrush(i.x, i.y, eraseBrushSize * (first.width / p.rect.width), bgManualTool === 'restore');
+                        paintAfter();
+                    }
+                },
+                move: (p) => {
+                    const i = toImg(p);
+                    if (isBg && bgManualTool === 'lasso') return;
+                    if (isBg && (bgManualTool === 'brush' || bgManualTool === 'restore')) {
+                        paintBgBrush(i.x, i.y, eraseBrushSize * (first.width / p.rect.width), bgManualTool === 'restore');
+                        paintAfter();
+                        return;
+                    }
+                    if (showCurtain) {
+                        compareSliderPos = clamp((p.cssX / p.rect.width) * 100, 0, 100);
+                        beforeCanvas.style.clipPath = 'inset(0 ' + (100 - compareSliderPos) + '% 0 0)';
+                        divider.style.left = compareSliderPos + '%';
+                    }
+                },
+                hover: (p, e, active) => {
+                    if (!isBg || bgManualTool !== 'lasso' || !lassoPoints.length || active) return;
+                    lassoMousePos = toImg(p);
+                    drawLassoOverlay();
+                }
+            });
+
+            compBox.ondblclick = () => {
+                if (isBg && bgManualTool === 'lasso' && lassoPoints.length >= 3) closeAndCutLassoPolygon();
+            };
+
+            compBox.appendChild(afterCanvas);
+            compBox.appendChild(beforeCanvas);
+            compBox.appendChild(overlayCanvas);
+            compBox.appendChild(divider);
+
+            if (activeTool.id === 'upscale') {
+                const bLeft = document.createElement('span');
+                bLeft.className = 'absolute top-3 left-3 px-2.5 py-1 rounded bg-slate-800/80 text-white text-[11px] font-bold z-10';
+                bLeft.textContent = first.width + ' x ' + first.height + ' px';
+                const bRight = document.createElement('span');
+                bRight.className = 'absolute top-3 right-3 px-2.5 py-1 rounded bg-[#4d90fe] text-white text-[11px] font-bold z-10';
+                bRight.textContent = (first.width * upscaleFactor) + ' x ' + (first.height * upscaleFactor) + ' px';
+                compBox.appendChild(bLeft); compBox.appendChild(bRight);
+            }
+
+            scrollWrap.appendChild(compBox);
+            container.appendChild(scrollWrap);
+            stage.appendChild(container);
+        }
+
+        function calcTargetDimensions(item) {
+            let w = resizeState.mode === 'pixels' ? resizeState.width : Math.round(item.width * (resizeState.percent / 100));
+            let h = resizeState.mode === 'pixels' ? resizeState.height : Math.round(item.height * (resizeState.percent / 100));
+            if (resizeState.noEnlarge && (w > item.width || h > item.height)) { w = item.width; h = item.height; }
+            return { w: Math.max(1, w), h: Math.max(1, h) };
+        }
+
+        /* ====================================================================
+           BARRA LATERAL
+           Regra importante: um "oninput" de slider NUNCA chama renderRightSidebar(),
+           porque isso destruía e recriava o próprio controle que o usuário estava
+           arrastando. Agora só o rótulo é atualizado.
+        ==================================================================== */
+        function liveLabel(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+
+        function syncEditorLabels() {
+            liveLabel('lbl-textX', editorState.textX + '%');
+            liveLabel('lbl-textY', editorState.textY + '%');
+            liveLabel('lbl-stickerX', editorState.stickerX + '%');
+            liveLabel('lbl-stickerY', editorState.stickerY + '%');
+            const sx = document.getElementById('rng-textX'); if (sx) sx.value = editorState.textX;
+            const sy = document.getElementById('rng-textY'); if (sy) sy.value = editorState.textY;
+            const kx = document.getElementById('rng-stickerX'); if (kx) kx.value = editorState.stickerX;
+            const ky = document.getElementById('rng-stickerY'); if (ky) ky.value = editorState.stickerY;
+        }
+
+        function slider(opts) {
+            // opts: {id,label,min,max,value,suffix,onInput}
+            return '<div><label class="font-bold block mb-1" for="' + opts.id + '">' + opts.label + ' (<span id="lbl-' + opts.key + '">' + opts.value + (opts.suffix || '') + '</span>)</label>' +
+                '<input type="range" id="' + opts.id + '" min="' + opts.min + '" max="' + opts.max + '" value="' + opts.value + '" ' +
+                'oninput="VJ.live(\'' + opts.key + '\', this.value)" class="w-full accent-[#4d90fe]"></div>';
+        }
+
+        function renderRightSidebar() {
+            const box = document.getElementById('sidebar-dynamic-controls');
+            box.innerHTML = '';
+            if (!activeTool) return;
+
+            if (activeTool.id === 'compress') {
+                const isTarget = compressMode === 'target';
+                box.innerHTML =
+                    '<div class="grid grid-cols-2 border rounded-xl overflow-hidden text-center text-xs font-bold">' +
+                    '<button type="button" onclick="VJ.setCompressMode(\'quality\')" class="p-3 ' + (!isTarget ? 'bg-blue-500/10 text-[#4d90fe] border-b-2 border-[#4d90fe]' : 'theme-subtle') + '">🎚️ Por qualidade</button>' +
+                    '<button type="button" onclick="VJ.setCompressMode(\'target\')" class="p-3 ' + (isTarget ? 'bg-blue-500/10 text-[#4d90fe] border-b-2 border-[#4d90fe]' : 'theme-subtle') + '">🎯 Por peso máximo</button>' +
+                    '</div>' +
+                    (isTarget
+                        ? '<div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-xs leading-relaxed">Diga o limite que o edital exige e o site procura sozinho a melhor qualidade que cabe nele. Nada de tentar e conferir no Explorer.</div>' +
+                          '<div><label class="block text-xs font-bold mb-1" for="target-kb">Peso máximo por imagem (KB):</label>' +
+                          '<input type="number" id="target-kb" min="20" max="20000" step="10" value="' + compressTargetKB + '" oninput="VJ.setTargetKB(this.value)" class="w-full rounded-lg theme-input p-2.5 text-center font-extrabold text-base"></div>' +
+                          '<div class="grid grid-cols-4 gap-1.5">' +
+                          [100, 300, 500, 1024].map(v => '<button type="button" onclick="VJ.setTargetKB(' + v + ',true)" class="py-2 rounded-lg text-[11px] font-bold border ' + (compressTargetKB === v ? 'border-[#4d90fe] text-[#4d90fe] bg-blue-500/10' : 'theme-subtle') + '">' + (v === 1024 ? '1 MB' : v + ' KB') + '</button>').join('') +
+                          '</div>' +
+                          '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (compressAllowResize ? 'checked' : '') + ' onchange="VJ.setAllowResize(this.checked)" class="mt-0.5 accent-emerald-500"><span>Se não couber nem na qualidade mínima, <strong>reduzir as dimensões</strong> da imagem até caber</span></label>' +
+                          '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">Neste modo o PNG não é oferecido: ele não aceita controle de qualidade, então não dá para mirar um peso. Use JPG, ou WEBP se precisar de transparência.</div>'
+                        : '<div class="p-3.5 rounded-xl bg-sky-500/10 border border-sky-400/40 text-xs leading-relaxed">Imagens com transparência são salvas em WEBP ou PNG para não ganharem fundo preto. As demais viram JPG.</div>' +
+                          '<div><label class="block text-xs font-bold mb-1" for="img-compress-quality">Qualidade (<span id="lbl-quality">75%</span>):</label>' +
+                          '<input type="range" id="img-compress-quality" min="20" max="95" value="75" oninput="VJ.live(\'quality\', this.value)" class="w-full accent-[#4d90fe]"></div>'
+                    ) +
+                    '<div><label class="block text-xs font-bold mb-1" for="compress-format">Formato de saída:</label>' +
+                    '<select id="compress-format" onchange="VJ.setCompressFormat(this.value)" class="w-full rounded-lg theme-input p-2 text-xs font-bold">' +
+                    '<option value="auto"' + (compressFormat === 'auto' ? ' selected' : '') + '>Automático (recomendado)</option>' +
+                    '<option value="image/jpeg"' + (compressFormat === 'image/jpeg' ? ' selected' : '') + '>JPG (sem transparência)</option>' +
+                    '<option value="image/webp"' + (compressFormat === 'image/webp' ? ' selected' : '') + '>WEBP (menor, com transparência)</option>' +
+                    (isTarget ? '' : '<option value="image/png"' + (compressFormat === 'image/png' ? ' selected' : '') + '>PNG (sem perdas)</option>') +
+                    '</select></div>';
+                return;
+            }
+
+            if (activeTool.id === 'photo-id') {
+                const t = idTargetSize();
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-xs leading-relaxed">Encaixe o rosto no gabarito à esquerda. A proporção fica travada no formato escolhido, então a foto nunca sai distorcida.</div>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="id-preset">Formato exigido:</label>' +
+                    '<select id="id-preset" onchange="VJ.setIdPreset(this.value)" class="w-full rounded-lg theme-input p-2 text-xs font-bold">' +
+                    Object.keys(ID_PRESETS).map(k => '<option value="' + k + '"' + (idState.preset === k ? ' selected' : '') + '>' + ID_PRESETS[k].label + '</option>').join('') +
+                    '</select></div>' +
+                    (idState.preset === 'custom'
+                        ? '<div class="grid grid-cols-2 gap-2"><div><label class="block text-[11px] font-bold mb-1" for="id-cw">Largura (px)</label><input type="number" id="id-cw" value="' + idState.customW + '" oninput="VJ.setIdCustom(\'customW\',this.value)" class="w-full rounded-lg theme-input p-2 text-center font-bold"></div>' +
+                          '<div><label class="block text-[11px] font-bold mb-1" for="id-ch">Altura (px)</label><input type="number" id="id-ch" value="' + idState.customH + '" oninput="VJ.setIdCustom(\'customH\',this.value)" class="w-full rounded-lg theme-input p-2 text-center font-bold"></div></div>'
+                        : '') +
+                    '<div class="p-2.5 rounded-xl theme-subtle border text-center text-[11px] font-bold">Saída final: <span class="text-[#4d90fe]">' + t.w + ' x ' + t.h + ' px</span></div>' +
+                    '<label class="flex items-center gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (idState.guides ? 'checked' : '') + ' onchange="VJ.setIdGuides(this.checked)" class="accent-indigo-500"> Mostrar linhas do gabarito</label>' +
+                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (idState.whiteBg ? 'checked' : '') + ' onchange="VJ.setIdWhiteBg(this.checked)" class="mt-0.5 accent-indigo-500"><span><strong>Fundo branco automático</strong> (usa a IA de remoção de fundo; mais lento)</span></label>' +
+                    '<div><label class="block text-xs font-bold mb-1" for="id-kb">Peso máximo (KB) — 0 para não limitar:</label>' +
+                    '<input type="number" id="id-kb" min="0" step="10" value="' + idState.limitKB + '" oninput="VJ.setIdLimitKB(this.value)" class="w-full rounded-lg theme-input p-2 text-center font-bold"></div>' +
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed"><strong>Como usar o gabarito:</strong> linha verde no topo da cabeça, linha vermelha no queixo, olhos sobre a linha azul tracejada. É o enquadramento aceito na maioria dos editais.</div>';
+                return;
+            }
+
+            if (activeTool.id === 'deskew') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-xs leading-relaxed">Marque os 4 cantos do papel na foto. O site recalcula a imagem como se ela tivesse sido fotografada de frente, em ângulo reto.</div>' +
+                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (deskewState.sharpen ? 'checked' : '') + ' onchange="VJ.setDeskew(\'sharpen\',this.checked)" class="mt-0.5 accent-teal-600"><span><strong>Aplicar filtro de nitidez</strong> — clareia o fundo do papel e remove a sombra, como um scanner</span></label>' +
+                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (deskewState.forceA4 ? 'checked' : '') + ' onchange="VJ.setDeskew(\'forceA4\',this.checked)" class="mt-0.5 accent-teal-600"><span><strong>Forçar proporção A4</strong> — use quando o documento for uma folha comum</span></label>' +
+                    '<button type="button" onclick="VJ.resetDeskew()" class="w-full py-2 rounded-lg theme-subtle border text-xs font-bold">↺ Reposicionar os cantos</button>' +
+                    (selectedFiles.length > 1 ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">Você tem ' + selectedFiles.length + ' imagens. Os cantos marcados valem para esta; nas demais, eles são aplicados na mesma posição proporcional. Se as fotos estiverem tortas de maneiras diferentes, processe uma de cada vez.</div>' : '');
+                return;
+            }
+
+            if (activeTool.id === 'resize') {
+                const isPx = resizeState.mode === 'pixels';
+                let html = '<div class="grid grid-cols-2 border rounded-xl overflow-hidden text-center text-xs font-bold">';
+                html += '<button type="button" onclick="VJ.setResizeMode(\'pixels\')" class="p-3 ' + (isPx ? 'bg-blue-500/10 text-[#4d90fe] border-b-2 border-[#4d90fe]' : 'theme-subtle') + '">📏 Por pixels</button>';
+                html += '<button type="button" onclick="VJ.setResizeMode(\'percent\')" class="p-3 ' + (!isPx ? 'bg-blue-500/10 text-[#4d90fe] border-b-2 border-[#4d90fe]' : 'theme-subtle') + '">％ Por porcentagem</button>';
+                html += '</div>';
+                if (isPx) {
+                    html += '<p class="text-xs theme-muted">Redimensionar todas as imagens até uma <strong>dimensão exata</strong> de</p>';
+                    html += '<div class="flex items-center justify-between border-b pb-3"><span class="font-bold text-xs">Largura (px):</span><input type="number" id="rz-w" value="' + resizeState.width + '" oninput="VJ.updateResizeWidth(this.value)" class="w-28 rounded-lg theme-input p-2 text-center font-bold"></div>';
+                    html += '<div class="flex items-center justify-between border-b pb-3"><span class="font-bold text-xs">Altura (px):</span><input type="number" id="rz-h" value="' + resizeState.height + '" oninput="VJ.updateResizeHeight(this.value)" class="w-28 rounded-lg theme-input p-2 text-center font-bold"></div>';
+                    html += '<label class="flex items-center gap-2.5 text-xs cursor-pointer pt-1"><input type="checkbox" ' + (resizeState.keepRatio ? 'checked' : '') + ' onchange="VJ.setKeepRatio(this.checked)" class="w-4 h-4 accent-emerald-500"> Manter proporção</label>';
+                    html += '<label class="flex items-center gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (resizeState.noEnlarge ? 'checked' : '') + ' onchange="VJ.setNoEnlarge(this.checked)" class="w-4 h-4 accent-emerald-500"> Não ampliar se o original for menor</label>';
+                } else {
+                    html += '<div class="space-y-2 pt-2">';
+                    [25, 50, 75].forEach(p => {
+                        const sel = resizeState.percent === p;
+                        html += '<div onclick="VJ.setPercent(' + p + ')" class="p-3 rounded-xl border cursor-pointer flex justify-between font-bold text-xs ' + (sel ? 'border-[#4d90fe] bg-blue-500/10 text-[#4d90fe]' : 'theme-subtle') + '"><span>' + (100 - p) + '% MENOR (' + p + '% do tamanho)</span>' + (sel ? '<span>✓</span>' : '') + '</div>';
+                    });
+                    html += '</div>';
+                }
+                box.innerHTML = html;
+                return;
+            }
+
+            if (activeTool.id === 'crop') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl bg-sky-500/10 border border-sky-400/40 text-xs">Você pode arrastar o retângulo e os cantos diretamente sobre a foto.</div>' +
+                    '<div class="flex items-center justify-between border-b pb-3"><span class="font-bold text-xs">Largura (px)</span><input type="number" id="crop-w" value="' + cropState.width + '" oninput="VJ.setCrop(\'width\',this.value)" class="w-28 rounded-lg theme-input p-2 text-center font-bold"></div>' +
+                    '<div class="flex items-center justify-between border-b pb-3"><span class="font-bold text-xs">Altura (px)</span><input type="number" id="crop-h" value="' + cropState.height + '" oninput="VJ.setCrop(\'height\',this.value)" class="w-28 rounded-lg theme-input p-2 text-center font-bold"></div>' +
+                    '<div class="flex items-center justify-between border-b pb-3"><span class="font-bold text-xs">Posição X (px)</span><input type="number" id="crop-x" value="' + cropState.x + '" oninput="VJ.setCrop(\'x\',this.value)" class="w-28 rounded-lg theme-input p-2 text-center font-bold"></div>' +
+                    '<div class="flex items-center justify-between border-b pb-3"><span class="font-bold text-xs">Posição Y (px)</span><input type="number" id="crop-y" value="' + cropState.y + '" oninput="VJ.setCrop(\'y\',this.value)" class="w-28 rounded-lg theme-input p-2 text-center font-bold"></div>' +
+                    (selectedFiles.length > 1 ? '<p class="text-[11px] theme-muted">Em lote, o recorte é aplicado na mesma posição relativa de cada imagem e ajustado ao tamanho de cada uma, para não estourar as bordas.</p>' : '');
+                return;
+            }
+
+            if (activeTool.id === 'to-jpg') {
+                box.innerHTML = '<div class="p-3.5 rounded-xl bg-sky-500/10 border border-sky-400/40 text-xs text-center">Todas as imagens serão convertidas para JPG com fundo branco onde houver transparência.</div>';
+                return;
+            }
+
+            if (activeTool.id === 'from-jpg') {
+                const isPng = fromJpgTarget === 'image/png';
+                box.innerHTML =
+                    '<div onclick="VJ.setFromJpg(\'image/png\')" class="option-row p-4 rounded-xl flex items-center justify-between ' + (isPng ? 'selected' : '') + '"><div><p class="font-extrabold text-xs text-[#4d90fe]">CONVERTER PARA PNG</p><p class="text-xs theme-muted mt-0.5">Sem perdas, aceita transparência</p></div>' + (isPng ? '<span class="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs flex items-center justify-center font-bold">✓</span>' : '<span>›</span>') + '</div>' +
+                    '<div onclick="VJ.setFromJpg(\'image/webp\')" class="option-row p-4 rounded-xl flex items-center justify-between ' + (!isPng ? 'selected' : '') + '"><div><p class="font-extrabold text-xs text-[#4d90fe]">CONVERTER PARA WEBP</p><p class="text-xs theme-muted mt-0.5">Bem menor, aceita transparência</p></div>' + (!isPng ? '<span class="w-6 h-6 rounded-full bg-emerald-500 text-white text-xs flex items-center justify-center font-bold">✓</span>' : '<span>›</span>') + '</div>';
+                return;
+            }
+
+            if (activeTool.id === 'editor') { renderEditorSidebar(box); return; }
+
+            if (activeTool.id === 'upscale') {
+                const f = selectedFiles[0] || { width:1000, height:1000, file:{ name:'imagem.png' } };
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">Isto é uma ampliação por reamostragem de alta qualidade com realce de nitidez — não é uma IA que inventa detalhes novos. O resultado fica bom para impressão e telas grandes, mas não recupera informação que não existe na foto original.</div>' +
+                    '<p class="font-bold text-xs pt-1">Multiplicador de dimensão</p>' +
+                    '<div class="grid grid-cols-2 gap-2">' +
+                    '<button type="button" onclick="VJ.setUpscale(2)" class="py-3 rounded-xl font-bold text-xs border-2 ' + (upscaleFactor === 2 ? 'border-[#4d90fe] text-[#4d90fe] bg-blue-500/5' : 'theme-subtle') + '">2x</button>' +
+                    '<button type="button" onclick="VJ.setUpscale(4)" class="py-3 rounded-xl font-bold text-xs border-2 ' + (upscaleFactor === 4 ? 'border-[#4d90fe] text-[#4d90fe] bg-blue-500/5' : 'theme-subtle') + '">4x</button>' +
+                    '</div>' +
+                    '<div class="p-3 rounded-xl theme-subtle border flex items-center justify-between text-[11px] font-bold gap-1">' +
+                    '<span class="truncate max-w-[90px]">' + escapeHtml(f.file.name) + '</span>' +
+                    '<span class="px-1.5 py-0.5 rounded bg-slate-400 text-white">' + f.width + 'x' + f.height + '</span><span>➔</span>' +
+                    '<span class="px-1.5 py-0.5 rounded bg-[#4d90fe] text-white">' + (f.width * upscaleFactor) + 'x' + (f.height * upscaleFactor) + '</span></div>';
+                return;
+            }
+
+            if (activeTool.id === 'removebg') { renderRemoveBgSidebar(box); return; }
+
+            if (activeTool.id === 'watermark') {
+                box.innerHTML =
+                    '<label class="block text-xs font-bold" for="wm-text">Texto da Marca d\'Água:</label>' +
+                    '<input type="text" id="wm-text" value="' + escapeHtml(watermarkState.text) + '" oninput="VJ.setWatermark(\'text\',this.value)" class="w-full rounded-xl theme-input p-2.5 text-xs font-bold">' +
+                    '<label class="block text-xs font-bold mt-2" for="wm-op">Opacidade (<span id="lbl-wmop">' + Math.round(watermarkState.opacity * 100) + '%</span>):</label>' +
+                    '<input type="range" id="wm-op" min="10" max="100" value="' + Math.round(watermarkState.opacity * 100) + '" oninput="VJ.live(\'wmop\', this.value)" class="w-full accent-[#4d90fe]">' +
+                    '<label class="block text-xs font-bold mt-2" for="wm-pos">Posição:</label>' +
+                    '<select id="wm-pos" onchange="VJ.setWatermark(\'pos\',this.value)" class="w-full rounded-lg theme-input p-2 text-xs font-bold">' +
+                    '<option value="center"' + (watermarkState.pos === 'center' ? ' selected' : '') + '>Centro (diagonal)</option>' +
+                    '<option value="bottom"' + (watermarkState.pos === 'bottom' ? ' selected' : '') + '>Rodapé</option>' +
+                    '<option value="tile"' + (watermarkState.pos === 'tile' ? ' selected' : '') + '>Repetido por toda a imagem</option>' +
+                    '</select>';
+                return;
+            }
+
+            if (activeTool.id === 'meme') {
+                box.innerHTML =
+                    '<label class="block text-xs font-bold" for="meme-top">Texto Superior:</label><input type="text" id="meme-top" value="' + escapeHtml(memeState.top) + '" oninput="VJ.setMeme(\'top\',this.value)" class="w-full rounded-xl theme-input p-2 text-xs font-bold">' +
+                    '<label class="block text-xs font-bold" for="meme-bottom">Texto Inferior:</label><input type="text" id="meme-bottom" value="' + escapeHtml(memeState.bottom) + '" oninput="VJ.setMeme(\'bottom\',this.value)" class="w-full rounded-xl theme-input p-2 text-xs font-bold">';
+                return;
+            }
+
+            if (activeTool.id === 'rotate') {
+                box.innerHTML = '<div class="grid grid-cols-2 gap-2"><button type="button" onclick="VJ.rotate(90)" class="py-3 rounded-xl theme-subtle border font-bold text-xs">↻ Rodar +90°</button><button type="button" onclick="VJ.rotate(270)" class="py-3 rounded-xl theme-subtle border font-bold text-xs">↺ Rodar -90°</button></div><p class="text-xs theme-muted text-center">Ângulo atual: <strong>' + rotateAngle + '°</strong></p>';
+                return;
+            }
+
+            if (activeTool.id === 'html-to-img') {
+                box.innerHTML =
+                    '<label class="block text-xs font-bold mb-1" for="html-img-input">Edite o código HTML:</label>' +
+                    '<textarea id="html-img-input" rows="10" oninput="VJ.setHtmlSource(this.value)" class="w-full rounded-xl theme-input p-2.5 text-xs font-mono">' + escapeHtml(htmlSource) + '</textarea>' +
+                    '<p class="text-[11px] theme-muted">A imagem gerada é uma captura fiel da pré-visualização ao lado, em 2x de resolução.</p>';
+                return;
+            }
+
+            if (activeTool.id === 'blur-face') {
+                box.innerHTML =
+                    '<div class="p-3 rounded-xl theme-subtle border text-xs leading-relaxed">Arraste sobre o rosto ou a placa para marcar a área. O desfoque é calculado em proporção ao tamanho da área, então funciona igualmente bem em fotos pequenas e em fotos de 12 megapixels.</div>' +
+                    '<p class="text-xs theme-muted">Áreas marcadas: <strong>' + blurBoxes.length + '</strong></p>' +
+                    '<button type="button" onclick="VJ.undoBlur()" class="w-full py-2 rounded-lg theme-subtle border text-xs font-bold">↩ Desfazer Último Desfoque</button>' +
+                    '<button type="button" onclick="VJ.clearBlur()" class="w-full py-2 rounded-lg bg-red-500/10 text-red-500 text-xs font-bold">Limpar Todos</button>';
+                return;
+            }
+        }
+
+        function renderEditorSidebar(box) {
+            let tabHtml = '';
+            if (editorState.tab === 'filter') {
+                tabHtml = '<div class="space-y-3 text-xs"><p class="font-extrabold text-[#4d90fe] uppercase">🎨 Filtro e Luz</p>' +
+                    slider({ id:'rng-brightness', key:'brightness', label:'Brilho', min:40, max:180, value:editorState.brightness, suffix:'%' }) +
+                    slider({ id:'rng-contrast', key:'contrast', label:'Contraste', min:40, max:180, value:editorState.contrast, suffix:'%' }) +
+                    slider({ id:'rng-saturate', key:'saturate', label:'Saturação', min:0, max:220, value:editorState.saturate, suffix:'%' }) +
+                    slider({ id:'rng-sepia', key:'sepia', label:'Efeito Sépia', min:0, max:100, value:editorState.sepia, suffix:'%' }) +
+                    '<button type="button" onclick="VJ.resetFilters()" class="w-full py-2 rounded-lg theme-subtle border font-bold">Restaurar Luz Original</button></div>';
+            } else if (editorState.tab === 'transform') {
+                tabHtml = '<div class="space-y-3 text-xs"><p class="font-extrabold text-[#4d90fe] uppercase">🔄 Transformar & Espelhar</p><div class="grid grid-cols-2 gap-2">' +
+                    '<button type="button" onclick="VJ.editorRotate(90)" class="py-3 rounded-xl theme-subtle border font-bold">↻ Girar +90°</button>' +
+                    '<button type="button" onclick="VJ.editorRotate(270)" class="py-3 rounded-xl theme-subtle border font-bold">↺ Girar -90°</button>' +
+                    '<button type="button" onclick="VJ.editorFlip(\'h\')" class="py-3 rounded-xl theme-subtle border font-bold">↔ Espelhar Horiz.</button>' +
+                    '<button type="button" onclick="VJ.editorFlip(\'v\')" class="py-3 rounded-xl theme-subtle border font-bold">↕ Espelhar Vert.</button>' +
+                    '</div></div>';
+            } else if (editorState.tab === 'draw') {
+                tabHtml = '<div class="space-y-3 text-xs"><p class="font-extrabold text-[#4d90fe] uppercase">✏️ Desenhar na Foto</p>' +
+                    '<p class="theme-muted">Arraste o dedo ou o mouse sobre a foto à esquerda para desenhar livremente.</p>' +
+                    '<div><label class="font-bold block mb-1" for="brush-color">Cor do Pincel:</label><input type="color" id="brush-color" value="' + editorState.brushColor + '" oninput="VJ.setBrushColor(this.value)" class="w-full h-9 rounded cursor-pointer"></div>' +
+                    slider({ id:'rng-brushSize', key:'brushSize', label:'Espessura', min:2, max:40, value:editorState.brushSize, suffix:'px' }) +
+                    '<button type="button" onclick="VJ.undoStroke()" class="w-full py-2 rounded-lg theme-subtle border font-bold">↩ Desfazer Último Traço</button>' +
+                    '<button type="button" onclick="VJ.clearStrokes()" class="w-full py-2 rounded-lg bg-red-500/10 text-red-500 font-bold">Limpar Todo o Desenho</button></div>';
+            } else if (editorState.tab === 'text') {
+                tabHtml = '<div class="space-y-3 text-xs"><p class="font-extrabold text-[#4d90fe] uppercase">🔤 Adicionar Texto</p>' +
+                    '<p class="theme-muted">Dica: depois de digitar, arraste o texto direto sobre a foto para posicioná-lo.</p>' +
+                    '<div><label class="font-bold block mb-1" for="ed-text">Texto:</label><input type="text" id="ed-text" value="' + escapeHtml(editorState.text) + '" oninput="VJ.setEditorText(this.value)" placeholder="Digite seu texto aqui..." class="w-full rounded-lg theme-input p-2 font-bold"></div>' +
+                    '<div><label class="font-bold block mb-1" for="ed-color">Cor do Texto:</label><input type="color" id="ed-color" value="' + editorState.textColor + '" oninput="VJ.setTextColor(this.value)" class="w-full h-9 rounded cursor-pointer"></div>' +
+                    slider({ id:'rng-textSize', key:'textSize', label:'Tamanho da Fonte', min:16, max:160, value:editorState.textSize, suffix:'px' }) +
+                    slider({ id:'rng-textX', key:'textX', label:'Posição Horizontal', min:2, max:98, value:editorState.textX, suffix:'%' }) +
+                    slider({ id:'rng-textY', key:'textY', label:'Posição Vertical', min:4, max:99, value:editorState.textY, suffix:'%' }) +
+                    '</div>';
+            } else if (editorState.tab === 'stickers') {
+                tabHtml = '<div class="space-y-3 text-xs"><p class="font-extrabold text-[#4d90fe] uppercase">😎 Stickers & Emojis</p>' +
+                    '<p class="theme-muted">Escolha um e arraste direto sobre a foto.</p>' +
+                    '<div class="grid grid-cols-4 gap-2">' +
+                    ['🔥','⭐','❤️','✅','🎓','🚀','👑','⚖️','💡','🎯','🏆','✨'].map(s => '<button type="button" onclick="VJ.setSticker(\'' + s + '\')" class="p-2.5 rounded-xl border theme-subtle text-xl hover:border-[#4d90fe]">' + s + '</button>').join('') +
+                    '</div>' +
+                    slider({ id:'rng-stickerSize', key:'stickerSize', label:'Tamanho do Sticker', min:30, max:260, value:editorState.stickerSize, suffix:'px' }) +
+                    slider({ id:'rng-stickerX', key:'stickerX', label:'Posição Horizontal', min:5, max:95, value:editorState.stickerX, suffix:'%' }) +
+                    slider({ id:'rng-stickerY', key:'stickerY', label:'Posição Vertical', min:10, max:95, value:editorState.stickerY, suffix:'%' }) +
+                    '<button type="button" onclick="VJ.setSticker(\'\')" class="w-full py-2 rounded-lg bg-red-500/10 text-red-500 font-bold">Remover Sticker</button></div>';
+            } else if (editorState.tab === 'frame') {
+                tabHtml = '<div class="space-y-3 text-xs"><p class="font-extrabold text-[#4d90fe] uppercase">🖼️ Moldura & Cantos</p>' +
+                    slider({ id:'rng-radius', key:'radius', label:'Cantos Arredondados', min:0, max:200, value:editorState.radius, suffix:'px' }) +
+                    slider({ id:'rng-border', key:'border', label:'Espessura da Moldura', min:0, max:80, value:editorState.border, suffix:'px' }) +
+                    '<div><label class="font-bold block mb-1" for="border-color">Cor da Moldura:</label><input type="color" id="border-color" value="' + editorState.borderColor + '" oninput="VJ.setBorderColor(this.value)" class="w-full h-9 rounded cursor-pointer"></div></div>';
+            }
+
+            box.innerHTML = '<div class="flex items-center justify-between border rounded-xl p-2 theme-subtle mb-3">' +
+                '<button type="button" onclick="VJ.zoomEditor(-15)" class="w-8 h-8 rounded-lg theme-surface font-bold">−</button>' +
+                '<span class="text-xs font-bold">Zoom ' + editorState.zoom + '%</span>' +
+                '<button type="button" onclick="VJ.zoomEditor(15)" class="w-8 h-8 rounded-lg theme-surface font-bold">+</button>' +
+                '</div>' + tabHtml;
+        }
+
+        function renderRemoveBgSidebar(box) {
+            box.innerHTML = '<div class="space-y-3 text-xs">' +
+                '<p class="font-extrabold uppercase text-[#4d90fe]">1. Acabamento manual</p>' +
+                '<div class="grid grid-cols-4 gap-1.5">' +
+                '<button type="button" onclick="VJ.setBgTool(\'lasso\')" class="p-2 rounded-xl border-2 font-bold flex flex-col items-center gap-1 ' + (bgManualTool === 'lasso' ? 'border-[#4d90fe] bg-blue-500/10 text-[#4d90fe]' : 'theme-subtle') + '"><span>✂️</span><span class="text-[10px] leading-tight">Laço</span></button>' +
+                '<button type="button" onclick="VJ.setBgTool(\'brush\')" class="p-2 rounded-xl border-2 font-bold flex flex-col items-center gap-1 ' + (bgManualTool === 'brush' ? 'border-[#4d90fe] bg-blue-500/10 text-[#4d90fe]' : 'theme-subtle') + '"><span>🧽</span><span class="text-[10px] leading-tight">Apagar</span></button>' +
+                '<button type="button" onclick="VJ.setBgTool(\'restore\')" class="p-2 rounded-xl border-2 font-bold flex flex-col items-center gap-1 ' + (bgManualTool === 'restore' ? 'border-[#4d90fe] bg-blue-500/10 text-[#4d90fe]' : 'theme-subtle') + '"><span>🖌️</span><span class="text-[10px] leading-tight">Restaurar</span></button>' +
+                '<button type="button" onclick="VJ.setBgTool(\'none\')" class="p-2 rounded-xl border-2 font-bold flex flex-col items-center gap-1 ' + (bgManualTool === 'none' ? 'border-[#4d90fe] bg-blue-500/10 text-[#4d90fe]' : 'theme-subtle') + '"><span>◄►</span><span class="text-[10px] leading-tight">Comparar</span></button>' +
+                '</div>' +
+
+                (bgManualTool === 'lasso' ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">' +
+                    '<p class="font-bold text-amber-700">✂️ Como usar o laço:</p>' +
+                    '<p class="text-[11px] theme-muted">Toque ponto a ponto ao redor do que deseja remover. Dê <strong>duplo toque</strong> (ou toque no 1º ponto verde) para fechar e apagar.</p>' +
+                    slider({ id:'rng-feather', key:'feather', label:'Suavizar borda do corte', min:0, max:12, value:bgFeather, suffix:'px' }) +
+                    '<div class="flex gap-1.5 pt-1">' +
+                    '<button type="button" onclick="VJ.cutLasso()" class="flex-1 py-2 rounded-lg bg-[#e5322d] text-white font-bold shadow">✂️ Cortar Área</button>' +
+                    '<button type="button" onclick="VJ.cancelLasso()" class="px-3 py-2 rounded-lg theme-surface border font-bold">Cancelar</button>' +
+                    '</div></div>' : '') +
+
+                ((bgManualTool === 'brush' || bgManualTool === 'restore') ? '<div class="p-3 rounded-xl theme-subtle border space-y-2">' +
+                    '<p class="font-bold">' + (bgManualTool === 'restore' ? '🖌️ Pincel de restauração: passe sobre o que a IA apagou demais para trazer de volta.' : '🧽 Borracha: passe sobre o que sobrou do fundo.') + '</p>' +
+                    slider({ id:'rng-brushBg', key:'brushBg', label:'Tamanho do pincel', min:5, max:120, value:eraseBrushSize, suffix:'px' }) +
+                    '</div>' : '') +
+
+                '<button type="button" onclick="VJ.undoBg()" class="w-full py-2 rounded-xl theme-subtle border font-bold hover:border-[#4d90fe]">↩ Desfazer (' + bgUndoStack.length + ')</button>' +
+
+                '<div class="pt-3 border-t space-y-2">' +
+                '<p class="font-extrabold uppercase text-[#4d90fe]">2. Fundo do resultado</p>' +
+                '<div class="grid grid-cols-4 gap-1.5">' +
+                '<button type="button" onclick="VJ.setBgFill(\'\')" class="p-2 rounded-xl border-2 text-[10px] font-bold ' + (!bgFillColor ? 'border-[#4d90fe] bg-blue-500/10' : 'theme-subtle') + '">Transp.</button>' +
+                '<button type="button" onclick="VJ.setBgFill(\'#ffffff\')" class="p-2 rounded-xl border-2 text-[10px] font-bold ' + (bgFillColor === '#ffffff' ? 'border-[#4d90fe] bg-blue-500/10' : 'theme-subtle') + '">Branco</button>' +
+                '<button type="button" onclick="VJ.setBgFill(\'#1e4fd8\')" class="p-2 rounded-xl border-2 text-[10px] font-bold ' + (bgFillColor === '#1e4fd8' ? 'border-[#4d90fe] bg-blue-500/10' : 'theme-subtle') + '">Azul 3x4</button>' +
+                '<input type="color" value="' + (bgFillColor || '#ffffff') + '" onchange="VJ.setBgFill(this.value)" class="w-full h-full min-h-[38px] rounded-xl cursor-pointer border-2" aria-label="Cor personalizada do fundo">' +
+                '</div>' +
+                '<p class="text-[11px] theme-muted">Branco e azul são os fundos aceitos em foto 3x4 de documento.</p>' +
+                '</div>' +
+
+                '<div class="pt-3 border-t space-y-2">' +
+                '<p class="font-extrabold uppercase text-[#4d90fe]">3. Motor automático</p>' +
+                '<div onclick="VJ.switchBgMode(\'studio-hd\')" class="p-2.5 rounded-xl border cursor-pointer ' + (removeBgMode === 'studio-hd' ? 'border-[#4d90fe] bg-blue-500/10 font-bold' : 'theme-subtle') + '">✨ IA Estúdio HD (alta precisão)</div>' +
+                '<div onclick="VJ.switchBgMode(\'ai\')" class="p-2.5 rounded-xl border cursor-pointer ' + (removeBgMode === 'ai' ? 'border-[#4d90fe] bg-blue-500/10 font-bold' : 'theme-subtle') + '">⚡ IA Rápida (só pessoas)</div>' +
+                '<div onclick="VJ.switchBgMode(\'flood\')" class="p-2.5 rounded-xl border cursor-pointer ' + (removeBgMode === 'flood' ? 'border-[#4d90fe] bg-blue-500/10 font-bold' : 'theme-subtle') + '">✍️ Logos e assinaturas (fundo liso)</div>' +
+                (removeBgMode === 'ai' ? '<div><label class="block font-bold mt-2 mb-1" for="rng-edge">Refinar borda (<span id="lbl-edge">' + aiEdgeCutoff + '</span>):</label><input type="range" id="rng-edge" min="80" max="235" value="' + aiEdgeCutoff + '" oninput="VJ.live(\'edge\', this.value)" onchange="VJ.applyEdgeCutoff(this.value)" class="w-full accent-[#4d90fe]"></div>' : '') +
+                '</div></div>';
+        }
+
+        /* ==================== DESENHO DA PRÉ-VISUALIZAÇÃO ==================== */
+        function renderPreviewOnCanvas(canvas, item, scale) {
+            scale = scale || 1;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.filter = 'brightness(' + editorState.brightness + '%) contrast(' + editorState.contrast + '%) saturate(' + editorState.saturate + '%) sepia(' + editorState.sepia + '%)';
+
+            if (editorState.radius > 0 && ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(0, 0, canvas.width, canvas.height, editorState.radius * scale);
+                ctx.clip();
+            }
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate((editorState.rotation * Math.PI) / 180);
+            ctx.scale(editorState.flipH ? -1 : 1, editorState.flipV ? -1 : 1);
+            const swap = (editorState.rotation === 90 || editorState.rotation === 270);
+            const drawW = swap ? canvas.height : canvas.width;
+            const drawH = swap ? canvas.width : canvas.height;
+            ctx.drawImage(item.img, -drawW / 2, -drawH / 2, drawW, drawH);
+            ctx.restore();
+            ctx.restore();
+
+            editorState.paths.forEach(p => {
+                if (p.points.length < 2) return;
+                ctx.save();
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = p.size * scale;
+                ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(p.points[0].x * scale, p.points[0].y * scale);
+                for (let i = 1; i < p.points.length; i++) ctx.lineTo(p.points[i].x * scale, p.points[i].y * scale);
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            if (editorState.border > 0) {
+                ctx.save();
+                ctx.strokeStyle = editorState.borderColor || '#ffffff';
+                ctx.lineWidth = editorState.border * scale;
+                ctx.strokeRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
+
+            if (activeTool.id === 'editor' && editorState.text) {
+                ctx.save();
+                ctx.font = 'bold ' + Math.round(editorState.textSize * scale) + 'px Inter, sans-serif';
+                ctx.fillStyle = editorState.textColor || '#ffffff';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = Math.max(2, 4 * scale);
+                ctx.textAlign = 'center';
+                const xPos = (editorState.textX / 100) * canvas.width;
+                const yPos = (editorState.textY / 100) * canvas.height;
+                ctx.strokeText(editorState.text, xPos, yPos);
+                ctx.fillText(editorState.text, xPos, yPos);
+                ctx.restore();
+            }
+
+            if (activeTool.id === 'editor' && editorState.sticker) {
+                ctx.save();
+                ctx.font = Math.round(editorState.stickerSize * scale) + 'px sans-serif';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(editorState.sticker, (editorState.stickerX / 100) * canvas.width, (editorState.stickerY / 100) * canvas.height);
+                ctx.restore();
+            }
+
+            if (activeTool.id === 'watermark' && watermarkState.text) {
+                drawWatermark(ctx, canvas, scale);
+            }
+
+            if (activeTool.id === 'meme') {
+                ctx.save();
+                const fs = Math.max(18, canvas.width * 0.09);
+                ctx.font = '900 ' + Math.round(fs) + 'px Impact, Haettenschweiler, "Arial Black", sans-serif';
+                ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000000';
+                ctx.lineWidth = Math.max(2, fs * 0.11);
+                ctx.textAlign = 'center';
+                if (memeState.top) { ctx.strokeText(memeState.top.toUpperCase(), canvas.width / 2, fs * 1.15); ctx.fillText(memeState.top.toUpperCase(), canvas.width / 2, fs * 1.15); }
+                if (memeState.bottom) { ctx.strokeText(memeState.bottom.toUpperCase(), canvas.width / 2, canvas.height - fs * 0.45); ctx.fillText(memeState.bottom.toUpperCase(), canvas.width / 2, canvas.height - fs * 0.45); }
+                ctx.restore();
+            }
+
+            if (activeTool.id === 'blur-face') {
+                applyBlurBoxes(ctx, canvas, item, scale);
+            }
+        }
+
+        function drawWatermark(ctx, canvas, scale) {
+            const text = watermarkState.text;
+            ctx.save();
+            ctx.globalAlpha = watermarkState.opacity;
+            ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000000';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            if (watermarkState.pos === 'tile') {
+                const fs = Math.max(12, canvas.width * 0.045);
+                ctx.font = 'bold ' + Math.round(fs) + 'px Inter, sans-serif';
+                ctx.lineWidth = Math.max(1, fs * 0.06);
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(-Math.PI / 6);
+                const step = fs * 7;
+                for (let y = -canvas.height; y < canvas.height; y += fs * 3) {
+                    for (let x = -canvas.width; x < canvas.width; x += step) {
+                        ctx.strokeText(text, x, y); ctx.fillText(text, x, y);
+                    }
+                }
+            } else {
+                const fs = Math.max(14, canvas.width * 0.065);
+                ctx.font = 'bold ' + Math.round(fs) + 'px Inter, sans-serif';
+                ctx.lineWidth = Math.max(1, fs * 0.08);
+                const y = watermarkState.pos === 'bottom' ? canvas.height - fs : canvas.height / 2;
+                ctx.strokeText(text, canvas.width / 2, y);
+                ctx.fillText(text, canvas.width / 2, y);
+            }
+            ctx.restore();
+        }
+
+        /* ====================================================================
+           DESFOQUE PROPORCIONAL
+           Antes era blur(14px) fixo: numa foto de celular de 4000px de largura,
+           isso não escondia nada. Agora o raio acompanha o tamanho da área e o
+           conteúdo é reamostrado em baixa resolução (pixelização irreversível),
+           para que não seja possível "desfazer" o borrão.
+        ==================================================================== */
+        function applyBlurBoxes(ctx, canvas, item, scale) {
+            const sx = canvas.width / item.width;
+            blurBoxes.forEach(b => {
+                const dx = b.x * scale, dy = b.y * scale, dw = b.w * scale, dh = b.h * scale;
+                if (dw < 1 || dh < 1) return;
+                // 1. Pixeliza: reduz o pedaço a ~10x10 e reamplia.
+                const tiny = document.createElement('canvas');
+                tiny.width = Math.max(2, Math.round(dw / Math.max(6, dw / 10)));
+                tiny.height = Math.max(2, Math.round(dh / Math.max(6, dh / 10)));
+                const tctx = tiny.getContext('2d');
+                tctx.imageSmoothingEnabled = true;
+                tctx.drawImage(item.img, b.x, b.y, b.w, b.h, 0, 0, tiny.width, tiny.height);
+                ctx.save();
+                ctx.imageSmoothingEnabled = true;
+                // 2. Por cima, um desfoque proporcional ao tamanho da caixa.
+                ctx.filter = 'blur(' + Math.max(2, Math.round(Math.min(dw, dh) * 0.12)) + 'px)';
+                ctx.drawImage(tiny, 0, 0, tiny.width, tiny.height, dx, dy, dw, dh);
+                ctx.restore();
+            });
+        }
+
+        /* ==================== EXECUÇÃO ==================== */
+        // Imagens que não couberam no peso-alvo pedido, para avisar no fim.
+        let targetFailures = [];
+
+        async function executeActiveTool() {
+            const prog = document.getElementById('ws-progress-area');
+            prog.classList.remove('hidden');
+            setProgressText('Processando imagens...');
+            targetFailures = [];
+
+            try {
+                if (activeTool.id === 'html-to-img') {
+                    await exportHtmlToImage();
+                    return;
+                }
+                if (!selectedFiles.length) { alert('Selecione ao menos uma imagem.'); return; }
+
+                if (selectedFiles.length === 1) {
+                    const out = await processSingleImage(selectedFiles[0], 0);
+                    downloadBlob(out.blob, out.filename);
+                    reportTargetFailures();
+                } else {
+                    const zip = new JSZip();
+                    const falhas = [];
+                    for (let i = 0; i < selectedFiles.length; i++) {
+                        setProgressText('Processando ' + (i + 1) + ' de ' + selectedFiles.length + '...');
+                        try {
+                            const out = await processSingleImage(selectedFiles[i], i);
+                            zip.file(out.filename, out.blob);
+                        } catch (err) {
+                            falhas.push(selectedFiles[i].file.name + ': ' + err.message);
+                        }
+                    }
+                    if (falhas.length) zip.file('_IMAGENS_COM_ERRO.txt', falhas.join(String.fromCharCode(10)));
+                    setProgressText('Compactando o lote...');
+                    downloadBlob(await zip.generateAsync({ type:'blob' }), 'VJ_IMG_Lote_' + selectedFiles.length + '.zip');
+                    if (falhas.length) alert(falhas.length + ' imagem(ns) falharam. A lista está no .zip, em _IMAGENS_COM_ERRO.txt.');
+                    reportTargetFailures();
+                }
+            } catch (err) {
+                // O img.html não tinha nenhum tratamento de erro: quando algo
+                // falhava, a tela simplesmente voltava ao normal sem avisar.
+                console.error(err);
+                alert('Não consegui concluir a operação.' + String.fromCharCode(10) + String.fromCharCode(10) + 'Detalhe técnico: ' + ((err && err.message) || err));
+            } finally {
+                prog.classList.add('hidden');
+            }
+        }
+
+        function reportTargetFailures() {
+            if (!targetFailures.length) return;
+            const NL = String.fromCharCode(10);
+            alert('Não consegui chegar ao peso pedido nestas imagens, mesmo na qualidade mínima:' + NL + NL +
+                targetFailures.join(NL) + NL + NL +
+                'Elas foram salvas no menor tamanho possível. Para reduzir mais, marque a opção de reduzir as dimensões, ou diminua a resolução antes na ferramenta Redimensionar.');
+            targetFailures = [];
+        }
+
+        function canvasToBlob(canvas, type, quality) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error('O navegador não conseguiu gerar o arquivo neste formato.')), type, quality);
+            });
+        }
+
+        function hasTransparency(item) {
+            const c = document.createElement('canvas');
+            const w = Math.min(200, item.width), h = Math.min(200, item.height);
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(item.img, 0, 0, w, h);
+            const d = ctx.getImageData(0, 0, w, h).data;
+            for (let i = 3; i < d.length; i += 4) if (d[i] < 250) return true;
+            return false;
+        }
+
+        function extFor(mime) {
+            return { 'image/jpeg':'jpg', 'image/png':'png', 'image/webp':'webp' }[mime] || 'png';
+        }
+
+        /* ====================================================================
+           COMPRESSÃO POR PESO-ALVO
+           O edital diz "máximo 500 KB", não "qualidade 75%". Aqui a qualidade é
+           descoberta por busca binária: a imagem é gerada umas 8 vezes em
+           memória e fica a melhor que couber no limite. Se nem na qualidade
+           mínima couber, as dimensões são reduzidas em passos de 20%.
+           PNG não entra nesta conta: o formato ignora o parâmetro de qualidade.
+        ==================================================================== */
+        async function encodeUnderSize(canvas, mime, targetBytes, steps) {
+            // Duas sondagens baratas antes da busca, porque cada codificação de
+            // uma foto de 12 MP custa uns 200 ms:
+            // 1) se já couber na qualidade máxima, não há nada a procurar;
+            const topo = await canvasToBlob(canvas, mime, 0.95);
+            if (topo.size <= targetBytes) return topo;
+            // 2) se nem na mínima couber, a busca inteira seria desperdício.
+            const fundo = await canvasToBlob(canvas, mime, 0.05);
+            if (fundo.size > targetBytes) return null;
+
+            let lo = 0.05, hi = 0.95, bestBlob = fundo;
+            for (let i = 0; i < (steps || 7); i++) {
+                const q = (lo + hi) / 2;
+                const blob = await canvasToBlob(canvas, mime, q);
+                if (blob.size <= targetBytes) { bestBlob = blob; lo = q; } else { hi = q; }
+            }
+            return bestBlob;
+        }
+
+        async function compressToTargetSize(sourceCanvas, mime, targetBytes, allowResize, onProgress) {
+            if (onProgress) onProgress('Procurando a melhor qualidade que cabe no limite...');
+            const direct = await encodeUnderSize(sourceCanvas, mime, targetBytes, 8);
+            if (direct) return { blob: direct, scale: 1, ok: true };
+
+            if (allowResize) {
+                let scale = 1;
+                for (let step = 0; step < 6; step++) {
+                    scale *= 0.8;
+                    if (onProgress) onProgress('Ainda grande; reduzindo para ' + Math.round(scale * 100) + '% do tamanho...');
+                    const c = document.createElement('canvas');
+                    c.width = Math.max(40, Math.round(sourceCanvas.width * scale));
+                    c.height = Math.max(40, Math.round(sourceCanvas.height * scale));
+                    const ctx = c.getContext('2d');
+                    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                    if (mime === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); }
+                    ctx.drawImage(sourceCanvas, 0, 0, c.width, c.height);
+                    const blob = await encodeUnderSize(c, mime, targetBytes, 7);
+                    if (blob) return { blob, scale, ok: true };
+                }
+            }
+            // Não deu: devolve o menor possível e avisa quem chamou.
+            return { blob: await canvasToBlob(sourceCanvas, mime, 0.05), scale: 1, ok: false };
+        }
+
+        /* ====================================================================
+           CORREÇÃO DE PERSPECTIVA (ENDIREITAR DOCUMENTO)
+           Resolve a homografia que leva o retângulo de saída de volta aos 4
+           cantos marcados na foto e, para cada pixel do resultado, vai buscar
+           a cor correspondente na origem com interpolação bilinear.
+        ==================================================================== */
+        function solveLinearSystem(M, rhs) {
+            const n = rhs.length;
+            for (let col = 0; col < n; col++) {
+                let piv = col;
+                for (let r = col + 1; r < n; r++) if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+                if (Math.abs(M[piv][col]) < 1e-12) return null;
+                const tmp = M[col]; M[col] = M[piv]; M[piv] = tmp;
+                const t2 = rhs[col]; rhs[col] = rhs[piv]; rhs[piv] = t2;
+                for (let r = 0; r < n; r++) {
+                    if (r === col) continue;
+                    const f = M[r][col] / M[col][col];
+                    if (!f) continue;
+                    for (let c = col; c < n; c++) M[r][c] -= f * M[col][c];
+                    rhs[r] -= f * rhs[col];
+                }
+            }
+            const out = new Array(n);
+            for (let i = 0; i < n; i++) out[i] = rhs[i] / M[i][i];
+            return out;
+        }
+
+        // dst (u,v) -> src (x,y)
+        function homographyFromRectToQuad(W, H, quad) {
+            const dst = [[0, 0], [W, 0], [W, H], [0, H]];
+            const M = [], rhs = [];
+            for (let i = 0; i < 4; i++) {
+                const u = dst[i][0], v = dst[i][1], x = quad[i].x, y = quad[i].y;
+                M.push([u, v, 1, 0, 0, 0, -u * x, -v * x]); rhs.push(x);
+                M.push([0, 0, 0, u, v, 1, -u * y, -v * y]); rhs.push(y);
+            }
+            return solveLinearSystem(M, rhs);
+        }
+
+        // A eliminação gaussiana ainda devolve "uma solução" para cantos em
+        // linha reta ou cruzados, e o resultado seria uma imagem corrompida.
+        // Então a geometria é conferida antes: o quadrilátero precisa ser
+        // convexo e ter área suficiente.
+        function isValidQuad(quad) {
+            if (!quad || quad.length !== 4) return false;
+            let area = 0, positivos = 0, negativos = 0;
+            for (let i = 0; i < 4; i++) {
+                const a = quad[i], b = quad[(i + 1) % 4], c = quad[(i + 2) % 4];
+                area += a.x * b.y - b.x * a.y;
+                const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+                if (cross > 1e-6) positivos++;
+                else if (cross < -1e-6) negativos++;
+                else return false; // três cantos alinhados
+            }
+            if (positivos !== 4 && negativos !== 4) return false; // cantos cruzados
+            return Math.abs(area / 2) > 100;
+        }
+
+        function warpPerspective(sourceCanvas, quad, outW, outH) {
+            if (!isValidQuad(quad)) {
+                throw new Error('Os 4 cantos não formam um quadrilátero válido. Eles não podem ficar em linha reta nem cruzados — reposicione-os nos cantos do papel.');
+            }
+            const h = homographyFromRectToQuad(outW, outH, quad);
+            if (!h) throw new Error('Os 4 cantos formam uma figura inválida. Reposicione-os em volta do documento.');
+            const sctx = sourceCanvas.getContext('2d');
+            const src = sctx.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+            const sd = src.data, sw = sourceCanvas.width, sh = sourceCanvas.height;
+
+            const out = document.createElement('canvas');
+            out.width = outW; out.height = outH;
+            const octx = out.getContext('2d');
+            const dst = octx.createImageData(outW, outH);
+            const dd = dst.data;
+            const a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], i2 = h[7];
+
+            for (let v = 0; v < outH; v++) {
+                for (let u = 0; u < outW; u++) {
+                    const den = g * u + i2 * v + 1;
+                    const x = (a * u + b * v + c) / den;
+                    const y = (d * u + e * v + f) / den;
+                    const o = (v * outW + u) * 4;
+                    if (x < 0 || y < 0 || x > sw - 1 || y > sh - 1) {
+                        dd[o] = 255; dd[o + 1] = 255; dd[o + 2] = 255; dd[o + 3] = 255;
+                        continue;
+                    }
+                    const x0 = x | 0, y0 = y | 0;
+                    const x1 = Math.min(x0 + 1, sw - 1), y1 = Math.min(y0 + 1, sh - 1);
+                    const fx = x - x0, fy = y - y0;
+                    const p00 = (y0 * sw + x0) * 4, p10 = (y0 * sw + x1) * 4;
+                    const p01 = (y1 * sw + x0) * 4, p11 = (y1 * sw + x1) * 4;
+                    for (let k = 0; k < 3; k++) {
+                        const top = sd[p00 + k] * (1 - fx) + sd[p10 + k] * fx;
+                        const bot = sd[p01 + k] * (1 - fx) + sd[p11 + k] * fx;
+                        dd[o + k] = top * (1 - fy) + bot * fy;
+                    }
+                    dd[o + 3] = 255;
+                }
+            }
+            octx.putImageData(dst, 0, 0);
+            return out;
+        }
+
+        // Mesmo filtro de nitidez do VJ Converter: estima o fundo do papel com
+        // uma versão borrada e divide a imagem por ele, apagando a sombra.
+        function applyScannerFilter(canvas) {
+            const w = canvas.width, h = canvas.height;
+            const ctx = canvas.getContext('2d');
+            const src = ctx.getImageData(0, 0, w, h);
+
+            const small = document.createElement('canvas');
+            const sw = Math.max(1, Math.round(w / 16)), sh = Math.max(1, Math.round(h / 16));
+            small.width = sw; small.height = sh;
+            small.getContext('2d').drawImage(canvas, 0, 0, sw, sh);
+
+            const blur = document.createElement('canvas');
+            blur.width = w; blur.height = h;
+            const bctx = blur.getContext('2d');
+            bctx.filter = 'blur(6px)';
+            bctx.drawImage(small, 0, 0, w, h);
+            const bg = bctx.getImageData(0, 0, w, h);
+
+            const d = src.data, b = bg.data;
+            for (let i = 0; i < d.length; i += 4) {
+                for (let k = 0; k < 3; k++) {
+                    const base = Math.max(40, b[i + k]);
+                    let v = (d[i + k] / base) * 255;
+                    v = v < 128 ? (v * v) / 128 : 255 - ((255 - v) * (255 - v)) / 128;
+                    d[i + k] = v > 248 ? 255 : (v < 0 ? 0 : v);
+                }
+            }
+            ctx.putImageData(src, 0, 0);
+        }
+
+        function itemToCanvas(item, maxSide) {
+            const c = document.createElement('canvas');
+            const scale = maxSide ? Math.min(1, maxSide / Math.max(item.width, item.height)) : 1;
+            c.width = Math.max(1, Math.round(item.width * scale));
+            c.height = Math.max(1, Math.round(item.height * scale));
+            const ctx = c.getContext('2d');
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(item.img, 0, 0, c.width, c.height);
+            return c;
+        }
+
+        function idTargetSize() {
+            const p = ID_PRESETS[idState.preset];
+            if (idState.preset === 'custom') {
+                return { w: clamp(parseInt(idState.customW, 10) || 400, 50, 4000), h: clamp(parseInt(idState.customH, 10) || 500, 50, 4000) };
+            }
+            return { w: p.w, h: p.h };
+        }
+
+        function initIdRect(item) {
+            const t = idTargetSize();
+            const ratio = t.w / t.h;
+            // Começa com um retângulo centralizado ocupando 70% da altura.
+            let h = item.height * 0.7, w = h * ratio;
+            if (w > item.width * 0.9) { w = item.width * 0.9; h = w / ratio; }
+            idState.rect = {
+                x: Math.round((item.width - w) / 2),
+                y: Math.round((item.height - h) / 2),
+                w: Math.round(w), h: Math.round(h)
+            };
+        }
+
+        function fixIdRectRatio(item) {
+            const t = idTargetSize();
+            const ratio = t.w / t.h;
+            const r = idState.rect;
+            if (!r) return;
+            r.h = Math.round(r.w / ratio);
+            if (r.y + r.h > item.height) { r.h = item.height - r.y; r.w = Math.round(r.h * ratio); }
+            if (r.x + r.w > item.width) { r.w = item.width - r.x; r.h = Math.round(r.w / ratio); }
+        }
+
+        function initDeskewCorners(item) {
+            const mx = item.width * 0.1, my = item.height * 0.1;
+            deskewState.corners = [
+                { x: mx, y: my },
+                { x: item.width - mx, y: my },
+                { x: item.width - mx, y: item.height - my },
+                { x: mx, y: item.height - my }
+            ];
+        }
+
+        function deskewOutputSize(quad) {
+            const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+            let w = (dist(quad[0], quad[1]) + dist(quad[3], quad[2])) / 2;
+            let h = (dist(quad[0], quad[3]) + dist(quad[1], quad[2])) / 2;
+            if (deskewState.forceA4) {
+                const a4 = 210 / 297;
+                if (w / h > a4) w = h * a4; else h = w / a4;
+            }
+            const maxSide = 2200;
+            const s = Math.min(1, maxSide / Math.max(w, h));
+            return { w: Math.max(40, Math.round(w * s)), h: Math.max(40, Math.round(h * s)) };
+        }
+
+        async function processSingleImage(item, index) {
+            const base = item.file.name.replace(/\.[^.]+$/, '');
+            const c = document.createElement('canvas');
+            const ctx = c.getContext('2d');
+
+            if (activeTool.id === 'compress') {
+                let mime = compressFormat;
+                if (mime === 'auto') mime = hasTransparency(item) ? 'image/webp' : 'image/jpeg';
+                // PNG não tem controle de qualidade: no modo peso-alvo ele vira JPG/WEBP.
+                if (compressMode === 'target' && mime === 'image/png') mime = hasTransparency(item) ? 'image/webp' : 'image/jpeg';
+                c.width = item.width; c.height = item.height;
+                if (mime === 'image/jpeg') { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); }
+                ctx.drawImage(item.img, 0, 0);
+
+                if (compressMode === 'target') {
+                    const target = Math.max(20, parseInt(compressTargetKB, 10) || 500) * 1024;
+                    const res = await compressToTargetSize(c, mime, target, compressAllowResize,
+                        (msg) => setProgressText(item.file.name + ': ' + msg));
+                    if (!res.ok) targetFailures.push(item.file.name + ' (menor possível: ' + Math.round(res.blob.size / 1024) + ' KB)');
+                    return { blob: res.blob, filename: base + '_' + Math.round(res.blob.size / 1024) + 'KB.' + extFor(mime) };
+                }
+
+                const q = parseInt((document.getElementById('img-compress-quality') || {}).value || '75', 10) / 100;
+                const blob = await canvasToBlob(c, mime, mime === 'image/png' ? undefined : q);
+                return { blob, filename: base + '_comprimido.' + extFor(mime) };
+            }
+
+            if (activeTool.id === 'photo-id') {
+                const t = idTargetSize();
+                const ref = selectedFiles[0];
+                const r = idState.rect || { x:0, y:0, w:ref.width, h:ref.height };
+                // Em lote, a mesma área relativa é usada em cada imagem.
+                const rx = r.x / ref.width, ry = r.y / ref.height;
+                const rw = r.w / ref.width, rh = r.h / ref.height;
+                const sw = clamp(Math.round(item.width * rw), 1, item.width);
+                const sh = clamp(Math.round(item.height * rh), 1, item.height);
+                const sxp = clamp(Math.round(item.width * rx), 0, item.width - sw);
+                const syp = clamp(Math.round(item.height * ry), 0, item.height - sh);
+
+                let sourceForCrop = item.img;
+                if (idState.whiteBg) {
+                    setProgressText('Removendo o fundo de ' + item.file.name + '...');
+                    const cut = await segmentItem(item);
+                    sourceForCrop = compositeBackground(cut, '#ffffff');
+                }
+
+                c.width = t.w; c.height = t.h;
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, t.w, t.h);
+                ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(sourceForCrop, sxp, syp, sw, sh, 0, 0, t.w, t.h);
+
+                const limit = parseInt(idState.limitKB, 10) || 0;
+                if (limit > 0) {
+                    const res = await compressToTargetSize(c, 'image/jpeg', limit * 1024, false,
+                        (msg) => setProgressText(item.file.name + ': ' + msg));
+                    if (!res.ok) targetFailures.push(item.file.name + ' (menor possível: ' + Math.round(res.blob.size / 1024) + ' KB)');
+                    return { blob: res.blob, filename: base + '_' + t.w + 'x' + t.h + '.jpg' };
+                }
+                return { blob: await canvasToBlob(c, 'image/jpeg', 0.95), filename: base + '_' + t.w + 'x' + t.h + '.jpg' };
+            }
+
+            if (activeTool.id === 'deskew') {
+                const ref = selectedFiles[0];
+                const quadRef = deskewState.corners || [];
+                if (quadRef.length !== 4) throw new Error('Marque os 4 cantos do documento antes de salvar.');
+                // Trabalha numa cópia de até 2200px: a transformação é feita
+                // pixel a pixel em JavaScript, e a foto crua de 50MP travaria a aba.
+                const work = itemToCanvas(item, 2200);
+                const sx = work.width / item.width, sy = work.height / item.height;
+                const quad = quadRef.map(p => ({
+                    x: clamp((p.x / ref.width) * item.width * sx, 0, work.width),
+                    y: clamp((p.y / ref.height) * item.height * sy, 0, work.height)
+                }));
+                setProgressText('Corrigindo a perspectiva de ' + item.file.name + '...');
+                const size = deskewOutputSize(quad);
+                const out = warpPerspective(work, quad, size.w, size.h);
+                if (deskewState.sharpen) {
+                    setProgressText('Aplicando o filtro de nitidez...');
+                    applyScannerFilter(out);
+                }
+                return { blob: await canvasToBlob(out, 'image/jpeg', 0.93), filename: base + '_endireitado.jpg' };
+            }
+
+            if (activeTool.id === 'resize') {
+                const dim = calcTargetDimensions(item);
+                c.width = dim.w; c.height = dim.h;
+                ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                const keepAlpha = hasTransparency(item);
+                const mime = keepAlpha ? 'image/png' : 'image/jpeg';
+                if (!keepAlpha) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); }
+                ctx.drawImage(item.img, 0, 0, dim.w, dim.h);
+                // A extensão agora corresponde ao conteúdo real do arquivo.
+                const blob = await canvasToBlob(c, mime, 0.92);
+                return { blob, filename: base + '_' + dim.w + 'x' + dim.h + '.' + extFor(mime) };
+            }
+
+            if (activeTool.id === 'crop') {
+                // Em lote, a área é reposicionada proporcionalmente e limitada ao
+                // tamanho de cada imagem — antes, usar as coordenadas da primeira
+                // em imagens menores gerava recortes vazios ou cortados.
+                const ref = selectedFiles[0];
+                const rx = cropState.x / ref.width, ry = cropState.y / ref.height;
+                const rw = cropState.width / ref.width, rh = cropState.height / ref.height;
+                const sw = clamp(Math.round(item.width * rw), 1, item.width);
+                const sh = clamp(Math.round(item.height * rh), 1, item.height);
+                const sxp = clamp(Math.round(item.width * rx), 0, item.width - sw);
+                const syp = clamp(Math.round(item.height * ry), 0, item.height - sh);
+                c.width = sw; c.height = sh;
+                ctx.drawImage(item.img, sxp, syp, sw, sh, 0, 0, sw, sh);
+                return { blob: await canvasToBlob(c, 'image/png'), filename: base + '_recortado.png' };
+            }
+
+            if (activeTool.id === 'to-jpg') {
+                c.width = item.width; c.height = item.height;
+                ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                ctx.drawImage(item.img, 0, 0);
+                return { blob: await canvasToBlob(c, 'image/jpeg', 0.92), filename: base + '.jpg' };
+            }
+
+            if (activeTool.id === 'from-jpg') {
+                c.width = item.width; c.height = item.height;
+                ctx.drawImage(item.img, 0, 0);
+                return { blob: await canvasToBlob(c, fromJpgTarget, 0.92), filename: base + '.' + extFor(fromJpgTarget) };
+            }
+
+            if (activeTool.id === 'upscale') {
+                c.width = item.width * upscaleFactor; c.height = item.height * upscaleFactor;
+                ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                // Ampliação em duas etapas: preserva mais detalhe que um salto direto.
+                const mid = document.createElement('canvas');
+                mid.width = Math.round(item.width * Math.sqrt(upscaleFactor));
+                mid.height = Math.round(item.height * Math.sqrt(upscaleFactor));
+                const mctx = mid.getContext('2d');
+                mctx.imageSmoothingEnabled = true; mctx.imageSmoothingQuality = 'high';
+                mctx.drawImage(item.img, 0, 0, mid.width, mid.height);
+                ctx.filter = 'contrast(106%) saturate(104%)';
+                ctx.drawImage(mid, 0, 0, c.width, c.height);
+                ctx.filter = 'none';
+                return { blob: await canvasToBlob(c, 'image/png'), filename: base + '_' + upscaleFactor + 'x.png' };
+            }
+
+            if (activeTool.id === 'removebg') {
+                setProgressText('Removendo fundo de ' + item.file.name + '...');
+                // A primeira imagem usa o resultado que você ajustou na tela.
+                // As demais são segmentadas individualmente, a partir dos
+                // próprios arquivos — esta era a maior falha do app.
+                const cut = (index === 0 && aiMaskCanvas) ? aiMaskCanvas : await segmentItem(item);
+                const finalCanvas = compositeBackground(cut, bgFillColor);
+                const mime = bgFillColor ? 'image/jpeg' : 'image/png';
+                return {
+                    blob: await canvasToBlob(finalCanvas, mime, 0.95),
+                    filename: base + (bgFillColor ? '_fundo_novo.jpg' : '_sem_fundo.png')
+                };
+            }
+
+            if (activeTool.id === 'rotate') {
+                const swap = rotateAngle === 90 || rotateAngle === 270;
+                c.width = swap ? item.height : item.width;
+                c.height = swap ? item.width : item.height;
+                ctx.translate(c.width / 2, c.height / 2);
+                ctx.rotate((rotateAngle * Math.PI) / 180);
+                ctx.drawImage(item.img, -item.width / 2, -item.height / 2);
+                return { blob: await canvasToBlob(c, 'image/png'), filename: base + '_rodado.png' };
+            }
+
+            // editor / meme / watermark / blur-face
+            const swap = (editorState.rotation === 90 || editorState.rotation === 270);
+            c.width = swap ? item.height : item.width;
+            c.height = swap ? item.width : item.height;
+            renderPreviewOnCanvas(c, item, 1);
+            return { blob: await canvasToBlob(c, 'image/png'), filename: base + '_editado.png' };
+        }
+
+        /* ====================================================================
+           HTML PARA IMAGEM — agora renderiza de verdade.
+           A versão anterior ignorava o HTML digitado e sempre devolvia um
+           retângulo azul com um texto fixo embutido no código.
+        ==================================================================== */
+        async function exportHtmlToImage() {
+            const box = document.getElementById('html-render-box');
+            if (!box) throw new Error('A pré-visualização não está na tela.');
+            if (!window.html2canvas) throw new Error('O motor de renderização (html2canvas) não carregou. Verifique sua conexão e recarregue a página.');
+            setProgressText('Renderizando o HTML...');
+            const canvas = await html2canvas(box, { scale: 2, backgroundColor: null, logging: false, useCORS: true });
+            downloadBlob(await canvasToBlob(canvas, 'image/png'), 'VJ_HTML_Imagem.png');
+        }
+
+        function downloadBlob(blob, name) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = name;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }
+
+        /* ==================== DIAGNÓSTICO ==================== */
+        function toggleDiagModal() {
+            const m = document.getElementById('diag-modal');
+            m.classList.toggle('hidden');
+            if (!m.classList.contains('hidden')) {
+                const checks = [
+                    { name:'Tailwind (estilos)', ok:!!window.tailwind, req:true },
+                    { name:'Lucide (ícones)', ok:!!window.lucide, req:true },
+                    { name:'JSZip (lotes .zip)', ok:!!window.JSZip, req:true },
+                    { name:'html2canvas (HTML para imagem)', ok:!!window.html2canvas, req:true },
+                    { name:'IA Estúdio HD (@imgly)', ok:!!window.imglyRemoveBackground, req:false },
+                    { name:'IA Rápida (MediaPipe)', ok:!!window.SelfieSegmentation, req:false },
+                    { name:'Modo offline (Service Worker)', ok:!!(navigator.serviceWorker && navigator.serviceWorker.controller), req:false }
+                ];
+                document.getElementById('diag-list').innerHTML = checks.map(c => {
+                    const label = c.ok ? '✓ OK' : (c.req ? '✕ FALHOU' : 'carrega ao usar');
+                    const cls = c.ok ? 'bg-emerald-500/15 text-emerald-600' : (c.req ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600');
+                    return '<div class="flex items-center justify-between p-2.5 rounded-xl theme-subtle border gap-2"><span class="font-bold">' + escapeHtml(c.name) + '</span><span class="px-2.5 py-0.5 rounded-full font-extrabold shrink-0 ' + cls + '">' + label + '</span></div>';
+                }).join('');
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') document.getElementById('diag-modal').classList.add('hidden');
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && activeTool) {
+                if (activeTool.id === 'removebg') { e.preventDefault(); undoLastBgAction(); }
+                else if (activeTool.id === 'editor' && editorState.tab === 'draw') { e.preventDefault(); editorState.paths.pop(); renderLeftStage(); }
+                else if (activeTool.id === 'blur-face') { e.preventDefault(); blurBoxes.pop(); renderLeftStage(); renderRightSidebar(); }
+            }
+        });
+
+        /* ====================================================================
+           AÇÕES EXPOSTAS
+           "live" trata todos os sliders: atualiza o estado e o rótulo, e
+           redesenha apenas o palco — nunca a barra lateral.
+        ==================================================================== */
+        const LIVE = {
+            brightness: v => { editorState.brightness = v; return v + '%'; },
+            contrast: v => { editorState.contrast = v; return v + '%'; },
+            saturate: v => { editorState.saturate = v; return v + '%'; },
+            sepia: v => { editorState.sepia = v; return v + '%'; },
+            radius: v => { editorState.radius = parseInt(v, 10); return v + 'px'; },
+            border: v => { editorState.border = parseInt(v, 10); return v + 'px'; },
+            brushSize: v => { editorState.brushSize = parseInt(v, 10); return v + 'px'; },
+            textSize: v => { editorState.textSize = parseInt(v, 10); return v + 'px'; },
+            textX: v => { editorState.textX = parseInt(v, 10); return v + '%'; },
+            textY: v => { editorState.textY = parseInt(v, 10); return v + '%'; },
+            stickerSize: v => { editorState.stickerSize = parseInt(v, 10); return v + 'px'; },
+            stickerX: v => { editorState.stickerX = parseInt(v, 10); return v + '%'; },
+            stickerY: v => { editorState.stickerY = parseInt(v, 10); return v + '%'; },
+            feather: v => { bgFeather = parseInt(v, 10); return v + 'px'; },
+            brushBg: v => { eraseBrushSize = parseInt(v, 10); return v + 'px'; },
+            edge: v => { aiEdgeCutoff = parseInt(v, 10); return String(v); },
+            quality: v => v + '%',
+            wmop: v => { watermarkState.opacity = parseInt(v, 10) / 100; return v + '%'; }
+        };
+
+        const VJ = {
+            live: (key, value) => {
+                const fn = LIVE[key];
+                if (!fn) return;
+                const label = fn(value);
+                liveLabel('lbl-' + key, label);
+                // Alguns sliders não alteram o palco (qualidade, borda da IA).
+                if (key !== 'quality' && key !== 'feather' && key !== 'brushBg' && key !== 'edge') renderLeftStage();
+            },
+            setEditorTab: (t) => { editorState.tab = t; renderRightSidebar(); renderLeftStage(); },
+            resetFilters: () => { editorState.brightness = 100; editorState.contrast = 100; editorState.saturate = 100; editorState.sepia = 0; renderRightSidebar(); renderLeftStage(); },
+            editorRotate: (d) => { editorState.rotation = (editorState.rotation + d) % 360; renderLeftStage(); },
+            editorFlip: (axis) => { if (axis === 'h') editorState.flipH = !editorState.flipH; else editorState.flipV = !editorState.flipV; renderLeftStage(); },
+            zoomEditor: (d) => { editorState.zoom = clamp(editorState.zoom + d, 30, 200); renderRightSidebar(); renderLeftStage(); },
+            setBrushColor: (v) => { editorState.brushColor = v; },
+            undoStroke: () => { editorState.paths.pop(); renderLeftStage(); },
+            clearStrokes: () => { editorState.paths = []; renderLeftStage(); },
+            setEditorText: (v) => { editorState.text = v; renderLeftStage(); },
+            setTextColor: (v) => { editorState.textColor = v; renderLeftStage(); },
+            setSticker: (v) => { editorState.sticker = v; renderLeftStage(); },
+            setBorderColor: (v) => { editorState.borderColor = v; renderLeftStage(); },
+
+            setResizeMode: (m) => { resizeState.mode = m; renderRightSidebar(); renderLeftStage(); },
+            setPercent: (p) => { resizeState.percent = p; renderRightSidebar(); renderLeftStage(); },
+            setKeepRatio: (v) => { resizeState.keepRatio = v; },
+            setNoEnlarge: (v) => { resizeState.noEnlarge = v; renderLeftStage(); },
+            updateResizeWidth: (val) => {
+                const w = parseInt(val, 10) || 1;
+                resizeState.width = w;
+                if (resizeState.keepRatio && selectedFiles[0]) {
+                    resizeState.height = Math.round(w * (selectedFiles[0].height / selectedFiles[0].width));
+                    const h = document.getElementById('rz-h'); if (h) h.value = resizeState.height;
+                }
+                renderLeftStage();
+            },
+            updateResizeHeight: (val) => {
+                const h = parseInt(val, 10) || 1;
+                resizeState.height = h;
+                if (resizeState.keepRatio && selectedFiles[0]) {
+                    resizeState.width = Math.round(h * (selectedFiles[0].width / selectedFiles[0].height));
+                    const w = document.getElementById('rz-w'); if (w) w.value = resizeState.width;
+                }
+                renderLeftStage();
+            },
+
+            setCrop: (k, v) => {
+                const n = parseInt(v, 10) || 0;
+                const first = selectedFiles[0];
+                if (!first) return;
+                if (k === 'width') cropState.width = clamp(n, 10, first.width);
+                if (k === 'height') cropState.height = clamp(n, 10, first.height);
+                if (k === 'x') cropState.x = clamp(n, 0, first.width - cropState.width);
+                if (k === 'y') cropState.y = clamp(n, 0, first.height - cropState.height);
+                cropState.x = clamp(cropState.x, 0, first.width - cropState.width);
+                cropState.y = clamp(cropState.y, 0, first.height - cropState.height);
+                renderLeftStage();
+            },
+
+            setCompressFormat: (v) => { compressFormat = v; },
+            setCompressMode: (m) => { compressMode = m; renderRightSidebar(); },
+            setTargetKB: (v, redraw) => {
+                compressTargetKB = clamp(parseInt(v, 10) || 500, 20, 20000);
+                if (redraw) renderRightSidebar();
+            },
+            setAllowResize: (v) => { compressAllowResize = v; },
+
+            setIdPreset: (p) => {
+                idState.preset = p;
+                if (selectedFiles[0]) { fixIdRectRatio(selectedFiles[0]); }
+                renderRightSidebar(); renderLeftStage();
+            },
+            setIdCustom: (k, v) => {
+                idState[k] = clamp(parseInt(v, 10) || 100, 50, 4000);
+                if (selectedFiles[0]) fixIdRectRatio(selectedFiles[0]);
+                const t = idTargetSize();
+                liveLabel('lbl-idsize', t.w + ' x ' + t.h + ' px');
+                renderLeftStage();
+            },
+            setIdGuides: (v) => { idState.guides = v; renderLeftStage(); },
+            setIdWhiteBg: (v) => { idState.whiteBg = v; },
+            setIdLimitKB: (v) => { idState.limitKB = Math.max(0, parseInt(v, 10) || 0); },
+
+            setDeskew: (k, v) => {
+                deskewState[k] = v;
+                if (selectedFiles[0]) updateDeskewPreview(selectedFiles[0]);
+            },
+            resetDeskew: () => {
+                if (!selectedFiles[0]) return;
+                initDeskewCorners(selectedFiles[0]);
+                renderLeftStage();
+            },
+            setFromJpg: (v) => { fromJpgTarget = v; renderRightSidebar(); },
+            setUpscale: (f) => { upscaleFactor = f; renderRightSidebar(); renderLeftStage(); },
+            rotate: (d) => { rotateAngle = (rotateAngle + d) % 360; renderRightSidebar(); renderLeftStage(); },
+            setMeme: (k, v) => { memeState[k] = v; renderLeftStage(); },
+            setWatermark: (k, v) => { watermarkState[k] = v; renderLeftStage(); },
+            setHtmlSource: (v) => {
+                htmlSource = v;
+                const box = document.getElementById('html-render-box');
+                if (box) box.innerHTML = v;
+            },
+            undoBlur: () => { blurBoxes.pop(); renderLeftStage(); renderRightSidebar(); },
+            clearBlur: () => { blurBoxes = []; renderLeftStage(); renderRightSidebar(); },
+
+            setBgTool: (t) => { bgManualTool = t; lassoPoints = []; renderLeftStage(); renderRightSidebar(); },
+            setBgFill: (c) => { bgFillColor = c; renderLeftStage(); renderRightSidebar(); },
+            cutLasso: () => closeAndCutLassoPolygon(),
+            cancelLasso: () => { lassoPoints = []; lassoMousePos = null; renderLeftStage(); },
+            undoBg: () => undoLastBgAction(),
+            zoomBg: (d) => { bgZoom = d === 0 ? 100 : clamp(bgZoom + d, 50, 400); renderLeftStage(); },
+            switchBgMode: async (m) => {
+                removeBgMode = m;
+                if (selectedFiles[0]) {
+                    resetBgState();
+                    await prepareRemoveBgPreview(selectedFiles[0]);
+                }
+                renderRightSidebar();
+                renderLeftStage();
+            },
+            applyEdgeCutoff: async (val) => {
+                aiEdgeCutoff = parseInt(val, 10) || 175;
+                if (removeBgMode === 'ai' && selectedFiles[0]) {
+                    await prepareRemoveBgPreview(selectedFiles[0]);
+                    renderLeftStage();
+                }
+            }
+        };
+
+        Object.assign(window, {
+            VJ, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect,
+            handleInitialDrop, executeActiveTool, setTheme, toggleDiagModal
+        });
+    })();
+    </script>
+</body>
+</html>
