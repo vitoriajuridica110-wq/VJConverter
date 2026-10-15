@@ -538,10 +538,13 @@
             if (activeTool.id === 'convert-video') {
                 box.innerHTML =
                     '<label class="block text-xs font-bold mb-1" for="vf">Formato de saída:</label>' +
-                    '<select id="vf" onchange="VJ.set(\'videoFormat\',this.value)" class="w-full rounded-lg theme-input p-2.5 text-xs font-bold">' +
+                    '<select id="vf" onchange="VJ.set(\'videoFormat\',this.value,true)" class="w-full rounded-lg theme-input p-2.5 text-xs font-bold">' +
                     ['mp4', 'webm', 'mkv', 'mov', 'avi'].map(f => '<option value="' + f + '"' + (state.videoFormat === f ? ' selected' : '') + '>' + f.toUpperCase() + '</option>').join('') +
                     '</select>' +
-                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">MP4 é o formato que funciona em praticamente tudo. WEBM gera arquivos menores, mas alguns programas antigos não abrem.</div>';
+                    (podeCopiar(state.videoFormat)
+                        ? '<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-[11px] leading-relaxed"><strong class="text-emerald-600">⚡ Troca rápida — alguns segundos.</strong><br>MP4, MKV e MOV guardam o mesmo vídeo por dentro; muda só a embalagem. O conteúdo é copiado como está, <strong>sem recodificar e sem perder qualidade</strong>.<br><span class="theme-muted">Se este arquivo não permitir a cópia, o programa recodifica sozinho e avisa.</span></div>'
+                        : '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-[11px] leading-relaxed text-amber-700"><strong>⏳ Este formato exige recodificar tudo.</strong><br>O ' + escapeHtml(state.videoFormat.toUpperCase()) + ' não aceita o vídeo que está dentro do seu arquivo, então cada quadro precisa ser refeito.' + (previsaoDeTempo() ? '<br>Estimativa para este vídeo: <strong>' + previsaoDeTempo() + '</strong>.' : '') + '<br><span class="theme-muted">Se puder, prefira MP4 ou MKV: saem em segundos.</span></div>') +
+                    '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">MP4 funciona em praticamente tudo. MKV aceita qualquer conteúdo por dentro. WEBM é menor, mas exige recodificação.</div>';
                 return;
             }
 
@@ -554,6 +557,7 @@
                     '<div class="grid grid-cols-4 gap-1.5">' +
                     [8, 16, 25, 50].map(v => '<button type="button" onclick="VJ.set(\'targetMB\',' + v + ',true)" class="py-2 rounded-lg text-[11px] font-bold border ' + (Number(state.targetMB) === v ? 'border-[#7c3aed] text-[#7c3aed] bg-violet-500/10' : 'theme-subtle') + '">' + v + ' MB</button>').join('') +
                     '</div>' +
+                    (previsaoDeTempo() ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">⏳ Comprimir obriga a refazer cada quadro do vídeo — não tem como ser instantâneo. Estimativa para este arquivo: <strong>' + previsaoDeTempo() + '</strong>. Deixe a aba aberta.</div>' : '') +
                     '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">Arquivo atual: <strong>' + atual.toFixed(2) + ' MB</strong>' +
                     (dur ? ' • duração <strong>' + formatTime(dur) + '</strong><br>Taxa de bits calculada: <strong>' + estimateBitrateKbps() + ' kbps</strong>' : '') +
                     '</div>' +
@@ -571,7 +575,10 @@
                     '<input type="range" id="te" min="0" max="' + Math.max(1, Math.ceil(dur)) + '" step="1" value="' + Math.ceil(state.trimEnd) + '" oninput="VJ.setTrim(\'trimEnd\',this.value)" class="w-full accent-[#7c3aed]">' +
                     '<button type="button" onclick="VJ.useCurrentTime(\'trimEnd\')" class="w-full mt-1 py-1.5 rounded-lg theme-subtle border text-[11px] font-bold">⏱️ Usar o tempo atual do player</button></div>' +
                     '<div class="p-2.5 rounded-xl theme-subtle border text-center text-[11px] font-bold">Trecho: <span id="lbl-trimdur" class="text-[#7c3aed]">' + formatTime(Math.max(0, state.trimEnd - state.trimStart)) + '</span></div>' +
-                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (state.trimPrecise ? 'checked' : '') + ' onchange="VJ.set(\'trimPrecise\',this.checked)" class="mt-0.5 accent-violet-600"><span><strong>Corte exato no segundo</strong> — recodifica o vídeo, então demora bem mais, mas começa no ponto certo</span></label>';
+                    '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (state.trimPrecise ? 'checked' : '') + ' onchange="VJ.set(\'trimPrecise\',this.checked,true)" class="mt-0.5 accent-violet-600"><span><strong>Corte exato no segundo</strong> — recodifica o vídeo, então demora bem mais, mas começa no ponto certo</span></label>' +
+                    (state.trimPrecise
+                        ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">⏳ Com o corte exato ligado, o tempo é proporcional ao <strong>trecho escolhido</strong>, não ao vídeo inteiro. Um trecho de 1 minuto em 1080p leva uns 5 minutos.</div>'
+                        : '<div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 text-[11px] leading-relaxed"><strong class="text-emerald-600">⚡ Do jeito que está, sai em segundos</strong> — e sem perder nada de qualidade.</div>');
                 return;
             }
 
@@ -623,6 +630,7 @@
                         .map(o => '<option value="' + o[0] + '"' + (state.resizeMode === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
                     '</select>' +
                     '<label class="flex items-start gap-2.5 text-xs cursor-pointer"><input type="checkbox" ' + (state.vertical ? 'checked' : '') + ' onchange="VJ.set(\'vertical\',this.checked)" class="mt-0.5 accent-violet-600"><span><strong>Recortar para 9:16 (vertical)</strong> — corta as laterais e deixa no formato de Reels, Shorts e TikTok</span></label>' +
+                    (previsaoDeTempo() ? '<div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 leading-relaxed">⏳ Mudar a resolução obriga a refazer cada quadro. Estimativa: <strong>' + previsaoDeTempo() + '</strong>. Reduzir a resolução deixa o processo mais rápido do que aumentá-la.</div>' : '') +
                     '<div class="p-3 rounded-xl theme-subtle border text-[11px] leading-relaxed">A altura é calculada sozinha para manter a proporção. Vídeos já menores que a resolução escolhida não são ampliados.</div>';
                 return;
             }
@@ -657,22 +665,61 @@
                 setProgress(14, 'Carregando o arquivo na memória...');
                 await ff.writeFile(inName, await UtilNS.fetchFile(selectedFile));
 
-                const plano = buildCommand(inName);
-                outName = plano.out;
-                setProgress(16, plano.msg || 'Processando...');
-                logLine('ffmpeg ' + plano.args.join(' '));
+                // Um ou mais planos, do mais rápido para o mais lento.
+                const planos = [].concat(buildCommand(inName));
+                let blob = null, planoUsado = null;
 
-                await ff.exec(plano.args);
+                for (let i = 0; i < planos.length; i++) {
+                    const plano = planos[i];
+                    outName = plano.out;
+                    setProgress(16, plano.msg || 'Processando...');
+                    logLine('ffmpeg ' + plano.args.join(' '));
 
-                setProgress(97, 'Lendo o resultado...');
-                const data = await ff.readFile(outName);
-                if (!data || !data.length) throw new Error('O processamento terminou sem gerar conteúdo. Veja os detalhes técnicos para entender o motivo.');
-                const blob = new Blob([data.buffer || data], { type: plano.mime });
+                    let falhou = false;
+                    try {
+                        const codigo = await ff.exec(plano.args);
+                        if (typeof codigo === 'number' && codigo !== 0) {
+                            falhou = true;
+                            logLine('Tentativa ' + (i + 1) + ' terminou com código ' + codigo + '.');
+                        }
+                    } catch (e) {
+                        falhou = true;
+                        logLine('Tentativa ' + (i + 1) + ' falhou: ' + ((e && e.message) || e));
+                    }
 
+                    if (!falhou) {
+                        try {
+                            const data = await ff.readFile(outName);
+                            if (data && data.length) {
+                                blob = new Blob([data.buffer || data], { type: plano.mime });
+                                planoUsado = plano;
+                                break;
+                            }
+                            logLine('Tentativa ' + (i + 1) + ' não gerou conteúdo.');
+                        } catch (e) {
+                            logLine('Tentativa ' + (i + 1) + ': não consegui ler a saída.');
+                        }
+                    }
+
+                    // Limpa a sobra antes da próxima tentativa.
+                    try { await ff.deleteFile(outName); } catch (e) {}
+                    if (i < planos.length - 1) {
+                        setProgress(16, 'A troca rápida não serviu para este arquivo. Recodificando...');
+                    }
+                }
+
+                if (!blob) {
+                    throw new Error('Nenhuma das tentativas gerou um arquivo. Abra "Ver detalhes técnicos" para ver o que o FFmpeg relatou.');
+                }
+
+                setProgress(97, 'Finalizando...');
                 // Limpa a memória virtual do FFmpeg para o próximo arquivo.
-                try { await ff.deleteFile(inName); await ff.deleteFile(outName); } catch (e) {}
+                try { await ff.deleteFile(inName); await ff.deleteFile(planoUsado.out); } catch (e) {}
 
-                finishWith(blob, plano.filename, plano.nota);
+                const nota = planoUsado.rapido
+                    ? 'Feito sem recodificar: o vídeo por dentro foi copiado igualzinho, só mudou a embalagem. Por isso foi rápido e não houve perda de qualidade.'
+                    : planoUsado.nota;
+                finishWith(blob, planoUsado.filename, nota);
             } catch (err) {
                 console.error(err);
                 alert(friendlyError(err));
@@ -698,7 +745,50 @@
             return 'Não consegui concluir esta operação.' + NL + NL + 'Detalhe técnico: ' + m + NL + NL + 'Abra "Ver detalhes técnicos" na janela de progresso para a mensagem completa do FFmpeg.';
         }
 
+        /* ====================================================================
+           QUANDO DÁ PARA SÓ TROCAR A EMBALAGEM (REMUX)
+           MP4, MKV e MOV são "caixas" que guardam o mesmo tipo de vídeo por
+           dentro. Trocar de uma para outra é como passar um documento de uma
+           pasta para outra: não se reescreve nada. O MKV aceita praticamente
+           qualquer conteúdo, então quase sempre dá.
+           O WEBM é a exceção: ele só aceita um tipo específico de vídeo, então
+           só vale tentar quando o arquivo de origem já é WEBM.
+           Tentar a cópia custa cerca de um segundo. Se não der, o programa
+           recodifica automaticamente — nada se perde em tentar.
+        ==================================================================== */
+        function extensaoDe(nome) {
+            const m = String(nome || '').match(/\.([^.]+)$/);
+            return m ? m[1].toLowerCase() : '';
+        }
+
+        function podeCopiar(destino) {
+            const origem = extensaoDe(selectedFile && selectedFile.name);
+            if (destino === 'webm') return origem === 'webm';
+            if (destino === 'avi') return origem === 'avi';
+            return true; // mp4, mkv, mov: vale sempre a tentativa
+        }
+
+        // Previsão honesta para a tela, antes de o usuário clicar.
+        function previsaoDeTempo() {
+            const dur = mediaInfo.duration || 0;
+            if (!dur) return null;
+            // Referência medida no uso real: vídeo 1080p recodificado no
+            // navegador leva cerca de 5x a própria duração (thread única).
+            const lado = Math.max(mediaInfo.width || 0, mediaInfo.height || 0);
+            let fator = 5;
+            if (lado >= 2000) fator = 11;
+            else if (lado >= 1900) fator = 5;
+            else if (lado >= 1200) fator = 2.6;
+            else if (lado >= 800) fator = 1.4;
+            else fator = 0.8;
+            const seg = dur * fator;
+            if (seg < 90) return 'menos de 2 minutos';
+            return 'cerca de ' + Math.round(seg / 60) + ' minutos';
+        }
+
         // Monta a linha de comando do FFmpeg para a ferramenta ativa.
+        // Pode devolver VÁRIOS planos: o programa tenta um por um, do mais
+        // rápido para o mais lento, e fica com o primeiro que funcionar.
         function buildCommand(inName) {
             const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
             const id = activeTool.id;
@@ -706,17 +796,36 @@
             if (id === 'convert-video') {
                 const f = state.videoFormat;
                 const out = 'saida.' + f;
-                const args = ['-i', inName];
-                if (f === 'webm') args.push('-c:v', 'libvpx', '-b:v', '1M', '-c:a', 'libvorbis');
-                else args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-c:a', 'aac', '-b:a', '160k');
-                args.push('-y', out);
-                // Evita devolver um arquivo com exatamente o mesmo nome do original.
                 const mesmaExt = new RegExp('\\.' + f + '$', 'i').test(selectedFile.name);
-                return {
-                    args, out,
-                    filename: baseName + (mesmaExt ? '_convertido' : '') + '.' + f,
-                    mime: f === 'webm' ? 'video/webm' : 'video/mp4', msg:'Convertendo o vídeo...'
-                };
+                const filename = baseName + (mesmaExt ? '_convertido' : '') + '.' + f;
+                const mime = f === 'webm' ? 'video/webm' : 'video/mp4';
+                const planos = [];
+
+                // PRIMEIRA TENTATIVA: trocar só a "embalagem" do arquivo.
+                // Formatos como MP4, MKV e MOV guardam o MESMO vídeo por dentro;
+                // muda apenas o invólucro. Nesses casos não há nada a recalcular:
+                // o conteúdo é copiado como está, em segundos, sem perder nada.
+                // Era isto que faltava — antes tudo era recodificado à toa.
+                if (podeCopiar(f)) {
+                    planos.push({
+                        args: ['-i', inName, '-c', 'copy', '-y', out],
+                        out, filename, mime, rapido: true,
+                        msg: 'Trocando o formato sem recodificar (rápido)...'
+                    });
+                }
+
+                // SEGUNDA TENTATIVA: se a cópia não servir (o vídeo por dentro
+                // não cabe nesse formato), recodifica de verdade.
+                const argsEnc = ['-i', inName];
+                if (f === 'webm') argsEnc.push('-c:v', 'libvpx', '-b:v', '1M', '-c:a', 'libvorbis');
+                else argsEnc.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-c:a', 'aac', '-b:a', '160k');
+                argsEnc.push('-y', out);
+                planos.push({
+                    args: argsEnc, out, filename, mime, rapido: false,
+                    msg: 'Recodificando o vídeo (esta é a parte demorada)...'
+                });
+
+                return planos;
             }
 
             if (id === 'compress-video') {
@@ -878,11 +987,13 @@
             const chunkCheck = { name:'FFmpeg — vendor/ffmpeg/814.ffmpeg.js (o Worker)', ok:null, req:true };
             checks.splice(5, 0, chunkCheck);
             pinta();
-            if (!isFileProtocol) {
-                fetch('vendor/ffmpeg/814.ffmpeg.js', { method:'GET', cache:'no-store' })
-                    .then(r => { chunkCheck.ok = r.ok; })
-                    .catch(() => { chunkCheck.ok = false; })
-                    .then(pinta);
+            if (!isFileProtocol && typeof fetch === 'function') {
+                try {
+                    fetch('vendor/ffmpeg/814.ffmpeg.js', { method:'GET', cache:'no-store' })
+                        .then(r => { chunkCheck.ok = r.ok; })
+                        .catch(() => { chunkCheck.ok = false; })
+                        .then(pinta);
+                } catch (e) { chunkCheck.ok = false; pinta(); }
             } else {
                 chunkCheck.ok = false;
                 pinta();

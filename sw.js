@@ -14,7 +14,7 @@
    versão abaixo. É isso que faz o navegador buscar a versão nova.
 ============================================================================ */
 
-const VERSION = 'vj-4.3.2';
+const VERSION = 'vj-4.3.3';
 const SHELL_CACHE = VERSION + '-shell';
 const LIB_CACHE = VERSION + '-libs';
 

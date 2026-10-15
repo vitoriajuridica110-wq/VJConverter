@@ -132,6 +132,30 @@ Limitações que estão escritas na própria tela, não só aqui: o núcleo tem 
 (um vídeo de 1 minuto leva de 1 a 3 minutos); e acima de uns 500 MB o navegador pode
 ficar sem memória.
 
+### Velocidade: troca de embalagem vs. recodificação
+
+A distinção que mais importa no VJ Mídia:
+
+| Operação | O que acontece | Tempo |
+|---|---|---|
+| Converter entre MP4 / MKV / MOV | Só troca a "embalagem" (`-c copy`) | **Segundos** |
+| Cortar trecho (modo padrão) | Só copia o pedaço | **Segundos** |
+| Remover áudio | Só descarta a trilha | **Segundos** |
+| Converter para WEBM ou AVI | Refaz cada quadro | Minutos |
+| Comprimir por MB, redimensionar, GIF, corte exato | Refaz cada quadro | Minutos |
+
+MP4, MKV e MOV são caixas diferentes para o mesmo conteúdo. Trocar de uma para outra
+não exige recalcular nada — e **a versão 4.3.3 corrigiu isto**: antes o programa
+recodificava sempre, o que fazia um MP4→MKV de 2 minutos levar 10 minutos em vez de
+poucos segundos.
+
+O programa tenta a cópia primeiro e, se o conteúdo não couber no formato escolhido,
+recodifica sozinho e avisa na tela. Tentar custa cerca de um segundo.
+
+**Quando a recodificação é inevitável**, o tempo gira em torno de 5x a duração do vídeo
+em 1080p, no núcleo de thread única. A interface mostra a estimativa antes de começar,
+calculada a partir da duração e da resolução. Reduzir a resolução é o que mais acelera.
+
 A compressão por MB calcula a taxa de bits a partir da duração (`alvo × 0,94 ÷ duração`,
 descontando o áudio), então o resultado chega perto do limite sem garantir o valor exato
 — e isso é dito ao usuário no fim, em vez de ser escondido.
