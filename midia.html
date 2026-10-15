@@ -14,14 +14,29 @@
     <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!--
-      ffmpeg.wasm — núcleo de THREAD ÚNICA, de propósito.
-      A versão multi-thread é mais rápida, mas exige os cabeçalhos COOP/COEP,
-      que isolam a origem e quebrariam o carregamento das bibliotecas do
-      index.html e do img.html. Thread única custa velocidade e não custa nada
-      ao resto do site.
+      ffmpeg.wasm — a BIBLIOTECA fica no nosso próprio domínio, na pasta
+      vendor/ffmpeg/. Isto NÃO é preciosismo: a biblioteca cria um "Worker"
+      a partir do arquivo 814.ffmpeg.js, e o navegador proíbe criar Worker a
+      partir de outro domínio. Carregada de um CDN, ela sempre falha com
+      "Failed to construct 'Worker'".
+
+      A opção classWorkerURL, que existiria para resolver isso, está quebrada
+      nesta versão da build UMD: o empacotador gravou dentro do arquivo o
+      caminho do computador do autor da biblioteca
+      ("file:///home/jeromewu/...") como base da URL. Por isso ela não é usada.
+
+      Servida daqui, a biblioteca descobre o caminho pelo próprio
+      document.currentScript.src e acha o worker no nosso domínio. Funciona.
+
+      Só o NÚCLEO pesado (ffmpeg-core, ~32 MB) continua vindo do CDN, porque
+      ele é baixado e convertido em blob — o que o navegador permite — e seria
+      grande demais para o repositório.
+
+      Núcleo de THREAD ÚNICA, de propósito: a versão multi-thread exigiria os
+      cabeçalhos COOP/COEP, que quebrariam o index.html e o img.html.
     -->
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+    <script src="vendor/ffmpeg/ffmpeg.js"></script>
+    <script src="vendor/ffmpeg/util.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -215,12 +230,6 @@
 
         // Núcleo de thread única: não exige SharedArrayBuffer nem COOP/COEP.
         const CORE_BASE = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-        const FFMPEG_BASE = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd';
-        // Pedaço do ffmpeg que vira o Worker. Precisa ser baixado e transformado
-        // em blob local: o navegador proíbe criar Worker a partir de um script
-        // hospedado em outro domínio, mesmo em HTTPS.
-        const FFMPEG_WORKER_CHUNK = FFMPEG_BASE + '/814.ffmpeg.js';
-
         const isFileProtocol = (location.protocol === 'file:');
 
         /* ==================== CATÁLOGO ==================== */
@@ -332,11 +341,10 @@
             ffmpegLoading = (async () => {
                 const FFmpegNS = window.FFmpegWASM || window.FFmpeg;
                 const UtilNS = window.FFmpegUtil || window.FFmpegUtils;
-                if (!FFmpegNS || !FFmpegNS.FFmpeg) {
-                    throw new Error('O motor de vídeo não carregou. Verifique sua conexão, recarregue a página (Ctrl+Shift+R) e tente de novo.');
-                }
-                if (!UtilNS || !UtilNS.toBlobURL) {
-                    throw new Error('A biblioteca auxiliar do motor de vídeo não carregou. Recarregue a página e tente de novo.');
+                if (!FFmpegNS || !FFmpegNS.FFmpeg || !UtilNS || !UtilNS.toBlobURL) {
+                    throw new Error('A biblioteca de vídeo não carregou.' + NL + NL +
+                        'Confira se a pasta "vendor/ffmpeg" foi enviada junto com o site, com os três arquivos dentro: ffmpeg.js, 814.ffmpeg.js e util.js.' + NL + NL +
+                        'Esses arquivos precisam ficar no seu próprio site — se vierem de fora, o navegador bloqueia.');
                 }
 
                 if (isFileProtocol) {
@@ -353,34 +361,16 @@
                     }
                 });
 
-                // Tudo precisa virar blob local, senão o Worker é barrado por
-                // ser de outra origem. Isso vale para o núcleo E para o pedaço
-                // do próprio ffmpeg que roda dentro do Worker.
+                // O núcleo é baixado do CDN e convertido em blob local. Isso o
+                // navegador permite, porque quem o carrega é um importScripts
+                // dentro do Worker, não a construção do Worker em si.
                 const coreURL = await UtilNS.toBlobURL(CORE_BASE + '/ffmpeg-core.js', 'text/javascript');
                 const wasmURL = await UtilNS.toBlobURL(CORE_BASE + '/ffmpeg-core.wasm', 'application/wasm');
 
-                let classWorkerURL = null;
-                try {
-                    classWorkerURL = await UtilNS.toBlobURL(FFMPEG_WORKER_CHUNK, 'text/javascript');
-                } catch (e) {
-                    // Se o nome do pedaço mudar numa versão futura, segue sem ele:
-                    // funciona quando a biblioteca está no mesmo domínio da página.
-                    logLine('Aviso: não consegui preparar o worker local (' + e.message + '). Tentando do jeito padrão.');
-                }
-
                 setProgress(11, 'Iniciando o motor...');
-                const opcoes = { coreURL, wasmURL };
-                if (classWorkerURL) opcoes.classWorkerURL = classWorkerURL;
-                try {
-                    await ffmpeg.load(opcoes);
-                } catch (e) {
-                    // Última tentativa, sem o worker local.
-                    if (!classWorkerURL) throw e;
-                    logLine('Primeira tentativa falhou (' + e.message + '). Tentando sem o worker local...');
-                    ffmpeg = new FFmpegNS.FFmpeg();
-                    ffmpeg.on('log', (ev) => logLine(ev.message));
-                    await ffmpeg.load({ coreURL, wasmURL });
-                }
+                // Sem classWorkerURL de propósito: a biblioteca acha o worker
+                // sozinha, no nosso domínio, pelo caminho do próprio script.
+                await ffmpeg.load({ coreURL, wasmURL });
                 ffmpegLoaded = true;
                 setProgress(14, 'Motor pronto. Começando...');
                 return ffmpeg;
@@ -693,7 +683,12 @@
 
         function friendlyError(err) {
             const m = String((err && err.message) || err);
-            if (/não carregou|not load|importScripts/i.test(m)) return m;
+            if (/construct 'Worker'|construct "Worker"/i.test(m)) {
+                return 'O navegador bloqueou a criação do motor de vídeo.' + NL + NL +
+                    'Isso acontece quando a pasta "vendor/ffmpeg" não está publicada junto com o site. Confira se ela existe no servidor, com os arquivos ffmpeg.js, 814.ffmpeg.js e util.js dentro.' + NL + NL +
+                    'Detalhe técnico: ' + m;
+            }
+            if (/não carregou|not load|importScripts|vendor/i.test(m)) return m;
             if (/memory|allocation|out of bounds|RangeError/i.test(m)) {
                 return 'O navegador ficou sem memória para este arquivo.' + NL + NL + 'Tente um trecho menor (ferramenta Cortar), ou reduza a resolução antes de converter.';
             }
@@ -863,17 +858,35 @@
                 { name:'Tailwind (estilos)', ok:!!window.tailwind, req:true },
                 { name:'Lucide (ícones)', ok:!!window.lucide, req:true },
                 { name:'JSZip', ok:!!window.JSZip, req:false },
-                { name:'FFmpeg (biblioteca)', ok:!!(FFmpegNS && FFmpegNS.FFmpeg), req:true },
-                { name:'FFmpeg (utilitários)', ok:!!(UtilNS && UtilNS.toBlobURL), req:true },
+                { name:'FFmpeg — vendor/ffmpeg/ffmpeg.js', ok:!!(FFmpegNS && FFmpegNS.FFmpeg), req:true },
+                { name:'FFmpeg — vendor/ffmpeg/util.js', ok:!!(UtilNS && UtilNS.toBlobURL), req:true },
                 { name:'Núcleo do FFmpeg baixado', ok:ffmpegLoaded, req:false },
                 { name:'WebAssembly no navegador', ok:(typeof WebAssembly === 'object'), req:true },
                 { name:'Modo offline (Service Worker)', ok:!!(navigator.serviceWorker && navigator.serviceWorker.controller), req:false }
             ];
-            document.getElementById('diag-list').innerHTML = checks.map(c => {
-                const label = c.ok ? '✓ OK' : (c.req ? '✕ FALHOU' : 'carrega ao usar');
-                const cls = c.ok ? 'bg-emerald-500/15 text-emerald-600' : (c.req ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600');
-                return '<div class="flex items-center justify-between p-2.5 rounded-xl theme-subtle border gap-2"><span class="font-bold">' + escapeHtml(c.name) + '</span><span class="px-2.5 py-0.5 rounded-full font-extrabold shrink-0 ' + cls + '">' + label + '</span></div>';
-            }).join('');
+            function pinta() {
+                document.getElementById('diag-list').innerHTML = checks.map(c => {
+                    const label = c.ok === null ? 'verificando...' : (c.ok ? '✓ OK' : (c.req ? '✕ FALHOU' : 'carrega ao usar'));
+                    const cls = c.ok === null ? 'bg-slate-500/15 theme-muted'
+                        : (c.ok ? 'bg-emerald-500/15 text-emerald-600' : (c.req ? 'bg-red-500/15 text-red-600' : 'bg-amber-500/15 text-amber-600'));
+                    return '<div class="flex items-center justify-between p-2.5 rounded-xl theme-subtle border gap-2"><span class="font-bold">' + escapeHtml(c.name) + '</span><span class="px-2.5 py-0.5 rounded-full font-extrabold shrink-0 ' + cls + '">' + label + '</span></div>';
+                }).join('');
+            }
+
+            // Verifica de verdade se o arquivo do Worker está publicado. É este
+            // que faltava e derrubava tudo com "Failed to construct 'Worker'".
+            const chunkCheck = { name:'FFmpeg — vendor/ffmpeg/814.ffmpeg.js (o Worker)', ok:null, req:true };
+            checks.splice(5, 0, chunkCheck);
+            pinta();
+            if (!isFileProtocol) {
+                fetch('vendor/ffmpeg/814.ffmpeg.js', { method:'GET', cache:'no-store' })
+                    .then(r => { chunkCheck.ok = r.ok; })
+                    .catch(() => { chunkCheck.ok = false; })
+                    .then(pinta);
+            } else {
+                chunkCheck.ok = false;
+                pinta();
+            }
         }
 
         window.addEventListener('keydown', (e) => {

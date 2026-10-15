@@ -153,12 +153,36 @@ da operação.
 Para testar antes de publicar, abra o Prompt de Comando na pasta do projeto e rode
 `npx serve`; depois acesse o endereço `http://localhost:3000` que ele mostrar.
 
-**Nota técnica sobre o Worker do FFmpeg:** a biblioteca carrega um pedaço de si mesma
-(`814.ffmpeg.js`) para rodar dentro do Worker. Como ela vem de um CDN, esse pedaço seria
-de outro domínio — e Worker de outro domínio é bloqueado **mesmo em HTTPS**. Por isso o
-`midia.html` baixa esse arquivo e o converte em blob local antes, passando-o como
-`classWorkerURL`. Se o nome do pedaço mudar numa versão futura, o código avisa no log e
-tenta o caminho padrão em vez de quebrar.
+### ⚠️ A pasta `vendor/ffmpeg/` é obrigatória — não apague
+
+O VJ Mídia **não funciona** sem estes três arquivos publicados junto com o site:
+
+```
+vendor/ffmpeg/ffmpeg.js         (4 KB)
+vendor/ffmpeg/814.ffmpeg.js     (2,6 KB)  ← o Worker
+vendor/ffmpeg/util.js           (3 KB)
+```
+
+**Por quê.** A biblioteca cria um *Worker* a partir do `814.ffmpeg.js`, e o navegador
+proíbe criar Worker a partir de outro domínio — **inclusive em HTTPS**. Servida de um
+CDN, ela falha sempre com `Failed to construct 'Worker'`.
+
+A opção `classWorkerURL`, que existiria justamente para contornar isso, **está quebrada
+na build UMD 0.12.10**: o empacotador gravou dentro do arquivo o caminho do computador
+do autor da biblioteca (`file:///home/jeromewu/...`) como base da URL. Por isso ela não
+é usada aqui.
+
+A solução é servir a biblioteca do próprio domínio: ela descobre o caminho pelo
+`document.currentScript.src` e encontra o Worker ao lado. O painel **🩺 Motor** verifica
+ativamente se o `814.ffmpeg.js` está acessível e aponta o problema caso a pasta não
+tenha subido.
+
+Apenas o núcleo pesado (`ffmpeg-core`, ~32 MB) continua vindo do CDN — ele é baixado e
+convertido em blob, o que o navegador permite, e seria grande demais para o repositório.
+
+**Se um dia atualizar a versão do `@ffmpeg/ffmpeg`:** troque os três arquivos do
+`vendor/ffmpeg/` pelos da versão nova, porque o nome do pedaço do Worker (`814`) muda
+entre versões.
 
 ## 📱 Instalação como aplicativo (PWA)
 

@@ -14,7 +14,7 @@
    versão abaixo. É isso que faz o navegador buscar a versão nova.
 ============================================================================ */
 
-const VERSION = 'vj-4.3.1';
+const VERSION = 'vj-4.3.2';
 const SHELL_CACHE = VERSION + '-shell';
 const LIB_CACHE = VERSION + '-libs';
 
@@ -27,7 +27,13 @@ const SHELL_FILES = [
     './manifest.webmanifest',
     './icon-192.png',
     './icon-512.png',
-    './apple-touch-icon.png'
+    './apple-touch-icon.png',
+    // A biblioteca de vídeo precisa estar no nosso domínio (o navegador não
+    // deixa criar um Worker a partir de outro site). Guardar no cache também
+    // faz o VJ Mídia abrir offline.
+    './vendor/ffmpeg/ffmpeg.js',
+    './vendor/ffmpeg/814.ffmpeg.js',
+    './vendor/ffmpeg/util.js'
 ];
 
 // Hosts de bibliotecas e modelos que podem ser guardados para uso offline.
