@@ -65,10 +65,8 @@
                 </div>
             </button>
             <nav class="hidden xl:flex items-center space-x-5 text-xs font-bold tracking-wider uppercase">
-                <button type="button" onclick="openTool('compress')" class="hover:text-[#4d90fe]">Comprimir Imagem</button>
-                <button type="button" onclick="openTool('resize')" class="hover:text-[#4d90fe]">Redimensionar</button>
-                <button type="button" onclick="openTool('crop')" class="hover:text-[#4d90fe]">Recortar</button>
                 <button type="button" onclick="openTool('removebg')" class="hover:text-[#4d90fe]">Remover Fundo</button>
+                <button type="button" onclick="openTool('photo-id')" class="hover:text-[#4d90fe]">Foto 3x4</button>
                 <button type="button" onclick="openTool('editor')" class="hover:text-[#4d90fe]">Editor de Fotos</button>
                 <button type="button" onclick="showHome()" class="hover:text-[#4d90fe]">Mais Ferramentas ▾</button>
             </nav>
@@ -81,6 +79,29 @@
             <a href="midia.html" class="hidden sm:flex text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#7c3aed] hover:bg-[#6d28d9] text-white shadow-sm items-center gap-1.5 transition" title="Vídeo e áudio">
                 <span>🎬 VJ Mídia</span>
             </a>
+            <!-- ================= MENU DOS OUTROS PROGRAMAS =================
+                 Para mudar os endereços, edite só as linhas <a> abaixo.
+                 ATENÇÃO ao endereço de Questões: ele está escrito com acento
+                 ("questões"). No DNS, isso é um endereço DIFERENTE de
+                 "questoes" sem acento — tecnicamente vira
+                 xn--questes-50a.vjconcursos.com.br.
+                 Se o botão não abrir, troque "questões" por "questoes" aqui.
+            ============================================================== -->
+            <div class="relative">
+                <button type="button" id="apps-menu-btn" onclick="toggleAppsMenu(event)"
+                        aria-haspopup="true" aria-expanded="false"
+                        class="text-xs font-bold px-2.5 py-1.5 rounded-lg theme-surface border flex items-center gap-1.5 hover:border-#4d90fe transition">
+                    <span class="hidden sm:inline">Meus programas</span><span class="sm:hidden">Apps</span>
+                    <span id="apps-menu-arrow" class="text-[10px] transition-transform duration-200">▼</span>
+                </button>
+                <div id="apps-menu" class="hidden absolute right-0 mt-2 w-60 theme-surface border rounded-xl shadow-2xl overflow-hidden z-50">
+                    <p class="px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest theme-muted border-b" style="border-color:var(--border-color);">Ecossistema VJ</p>
+                    <a href="https://pdf.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">📕</span> Leitor de PDF</a>
+                    <a href="https://flashcards.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">🧠</span> Flashcards</a>
+                    <a href="https://questões.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">❓</span> Questões</a>
+                    <a href="https://caderno.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">📓</span> Caderno</a>
+                </div>
+            </div>
             <div class="flex items-center rounded-xl p-0.5 theme-subtle border text-xs">
                 <button type="button" onclick="setTheme('light')" id="theme-btn-light" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema claro">☀️</button>
                 <button type="button" onclick="setTheme('sepia')" id="theme-btn-sepia" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema sépia">📜</button>
@@ -2625,8 +2646,39 @@
             }
         };
 
+
+        /* ==================== MENU DOS OUTROS PROGRAMAS ==================== */
+        function toggleAppsMenu(ev) {
+            if (ev) ev.stopPropagation();
+            const menu = document.getElementById('apps-menu');
+            const seta = document.getElementById('apps-menu-arrow');
+            const btn = document.getElementById('apps-menu-btn');
+            if (!menu) return;
+            const abrindo = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !abrindo);
+            if (seta) seta.style.transform = abrindo ? 'rotate(180deg)' : '';
+            if (btn) btn.setAttribute('aria-expanded', abrindo ? 'true' : 'false');
+        }
+        function fecharAppsMenu() {
+            const menu = document.getElementById('apps-menu');
+            if (!menu || menu.classList.contains('hidden')) return;
+            menu.classList.add('hidden');
+            const seta = document.getElementById('apps-menu-arrow');
+            if (seta) seta.style.transform = '';
+            const btn = document.getElementById('apps-menu-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+        // Fecha ao clicar fora ou ao apertar Esc.
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('apps-menu');
+            const btn = document.getElementById('apps-menu-btn');
+            if (!menu || menu.classList.contains('hidden')) return;
+            if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+            fecharAppsMenu();
+        });
+
         Object.assign(window, {
-            VJ, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect,
+            VJ, toggleAppsMenu, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect,
             handleInitialDrop, executeActiveTool, setTheme, toggleDiagModal
         });
     })();

@@ -132,6 +132,29 @@ Limitações que estão escritas na própria tela, não só aqui: o núcleo tem 
 (um vídeo de 1 minuto leva de 1 a 3 minutos); e acima de uns 500 MB o navegador pode
 ficar sem memória.
 
+### Limite de 10 minutos por vídeo
+
+O VJ Mídia aceita vídeos de até **10 minutos**. Acima disso o navegador tende a ficar
+sem memória, e mesmo quando aguenta a conversão passa de meia hora.
+
+A única exceção é o **Cortar trecho**: ele aceita qualquer duração, porque só copia o
+pedaço escolhido sem recodificar. Quando um arquivo longo é recusado, o programa
+oferece abrir o Cortar trecho já com aquele mesmo vídeo carregado.
+
+Para mudar o limite, altere `MAX_MINUTOS` no `midia.html`.
+
+### Menu "Meus programas"
+
+Os três programas têm no topo um botão com seta que abre o acesso aos demais sistemas
+do ecossistema. Os endereços ficam em um bloco de `<a>` no topo de cada arquivo, logo
+antes do seletor de temas, marcado por um comentário.
+
+> **Atenção ao endereço de Questões.** Ele está escrito com acento
+> (`questões.vjconcursos.com.br`). No DNS isso é um endereço **diferente** de
+> `questoes` sem acento — tecnicamente vira `xn--questes-50a.vjconcursos.com.br`, e
+> esse registro precisa existir no provedor e na Vercel. Se o botão não abrir, troque
+> `questões` por `questoes` nos três arquivos.
+
 ### Velocidade: troca de embalagem vs. recodificação
 
 A distinção que mais importa no VJ Mídia:

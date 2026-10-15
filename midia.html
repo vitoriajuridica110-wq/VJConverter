@@ -82,6 +82,29 @@
         <div class="flex items-center space-x-2">
             <a href="index.html" class="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#e5322d] hover:bg-[#c92520] text-white shadow-sm flex items-center gap-1.5 transition"><span>📄 VJ PDF</span></a>
             <a href="img.html" class="text-xs font-extrabold px-3 py-1.5 rounded-lg bg-[#4d90fe] hover:bg-[#357ae8] text-white shadow-sm flex items-center gap-1.5 transition"><span>🖼️ VJ IMG</span></a>
+            <!-- ================= MENU DOS OUTROS PROGRAMAS =================
+                 Para mudar os endereços, edite só as linhas <a> abaixo.
+                 ATENÇÃO ao endereço de Questões: ele está escrito com acento
+                 ("questões"). No DNS, isso é um endereço DIFERENTE de
+                 "questoes" sem acento — tecnicamente vira
+                 xn--questes-50a.vjconcursos.com.br.
+                 Se o botão não abrir, troque "questões" por "questoes" aqui.
+            ============================================================== -->
+            <div class="relative">
+                <button type="button" id="apps-menu-btn" onclick="toggleAppsMenu(event)"
+                        aria-haspopup="true" aria-expanded="false"
+                        class="text-xs font-bold px-2.5 py-1.5 rounded-lg theme-surface border flex items-center gap-1.5 hover:border-#7c3aed transition">
+                    <span class="hidden sm:inline">Meus programas</span><span class="sm:hidden">Apps</span>
+                    <span id="apps-menu-arrow" class="text-[10px] transition-transform duration-200">▼</span>
+                </button>
+                <div id="apps-menu" class="hidden absolute right-0 mt-2 w-60 theme-surface border rounded-xl shadow-2xl overflow-hidden z-50">
+                    <p class="px-3 py-2 text-[10px] font-extrabold uppercase tracking-widest theme-muted border-b" style="border-color:var(--border-color);">Ecossistema VJ</p>
+                    <a href="https://pdf.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">📕</span> Leitor de PDF</a>
+                    <a href="https://flashcards.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">🧠</span> Flashcards</a>
+                    <a href="https://questões.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">❓</span> Questões</a>
+                    <a href="https://caderno.vjconcursos.com.br" target="_blank" rel="noopener" class="flex items-center gap-2.5 px-3 py-2.5 text-xs font-bold hover:bg-[var(--bg-subtle)] transition"><span class="text-base">📓</span> Caderno</a>
+                </div>
+            </div>
             <div class="flex items-center rounded-xl p-0.5 theme-subtle border text-xs">
                 <button type="button" onclick="setTheme('light')" id="theme-btn-light" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema claro">☀️</button>
                 <button type="button" onclick="setTheme('sepia')" id="theme-btn-sepia" class="theme-btn px-2 py-1 rounded-lg font-bold" aria-label="Tema sépia">📜</button>
@@ -102,8 +125,9 @@
                 Converter, cortar, extrair o áudio e comprimir para caber no limite de upload — com o FFmpeg rodando no seu próprio aparelho.
             </p>
             <div class="mt-5 max-w-2xl mx-auto p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-700 text-xs text-left leading-relaxed">
-                <strong>Antes de começar, duas coisas honestas:</strong> na primeira vez o motor de vídeo (cerca de 32 MB) é baixado e fica guardado — depois disso funciona offline.
-                E como tudo roda dentro do navegador, é mais lento que um programa instalado: um vídeo de 1 minuto costuma levar de 1 a 3 minutos. Para arquivos acima de uns 500 MB, prefira um programa de computador.
+                <strong>Antes de começar, três coisas honestas:</strong> na primeira vez o motor de vídeo (cerca de 32 MB) é baixado e fica guardado — depois disso funciona offline.
+                Trocar entre MP4, MKV e MOV leva segundos, porque muda só a embalagem; já comprimir ou redimensionar refaz cada quadro e demora alguns minutos.
+                E há um <strong>limite de 10 minutos</strong> de duração por vídeo — acima disso o navegador fica sem memória. Para arquivos maiores, use o <strong>Cortar trecho</strong>, que aceita qualquer duração.
             </div>
             <div class="mt-7 flex flex-wrap items-center justify-center gap-2">
                 <button type="button" onclick="filterCategory('all')" data-cat="all" class="category-pill active px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold">Todos</button>
@@ -128,6 +152,7 @@
                 Selecionar arquivo
             </button>
             <p class="text-xs theme-muted">ou arraste e solte aqui</p>
+            <p id="ws-limite-aviso" class="text-[11px] theme-muted mt-3 max-w-md">Limite de <strong>10 minutos</strong> de duração por vídeo. Para arquivos maiores, use antes o <strong>Cortar trecho</strong>, que aceita qualquer duração.</p>
             <button type="button" onclick="showHome()" class="mt-8 text-xs font-semibold theme-muted hover:underline">← Voltar a todas as ferramentas</button>
         </div>
 
@@ -236,7 +261,7 @@
         const TOOLS = [
             { id:'convert-video', title:'Converter vídeo', desc:'Troque o formato do vídeo (MP4, WEBM, MKV, MOV, AVI) mantendo a qualidade.', cat:'video', icon:'film', color:'bg-violet-600', accept:'video/*', btnLabel:'Converter vídeo' },
             { id:'compress-video', title:'Comprimir até X MB', desc:'Informe o limite de upload e o programa calcula a taxa de bits para o vídeo caber nele.', cat:'otimizar', icon:'minimize-2', color:'bg-emerald-600', badge:'Alvo em MB', accept:'video/*', btnLabel:'Comprimir vídeo' },
-            { id:'trim', title:'Cortar trecho', desc:'Guarde só o pedaço que interessa, marcando início e fim. Sem recodificar, fica pronto em segundos.', cat:'video', icon:'scissors', color:'bg-pink-600', accept:'video/*,audio/*', btnLabel:'Cortar trecho' },
+            { id:'trim', title:'Cortar trecho', desc:'Guarde só o pedaço que interessa. Sem recodificar, fica pronto em segundos — e é a única que aceita vídeo de qualquer duração.', cat:'video', icon:'scissors', color:'bg-pink-600', badge:'Sem limite', accept:'video/*,audio/*', btnLabel:'Cortar trecho' },
             { id:'extract-audio', title:'Extrair áudio', desc:'Tire a trilha de áudio de um vídeo e salve em MP3, M4A ou WAV.', cat:'audio', icon:'music', color:'bg-amber-600', accept:'video/*', btnLabel:'Extrair áudio' },
             { id:'convert-audio', title:'Converter áudio', desc:'Converta entre MP3, WAV, M4A e OGG, escolhendo a taxa de bits.', cat:'audio', icon:'audio-lines', color:'bg-orange-600', accept:'audio/*', btnLabel:'Converter áudio' },
             { id:'mute', title:'Remover o áudio', desc:'Deixe o vídeo mudo sem recodificar a imagem — rápido e sem perda.', cat:'video', icon:'volume-x', color:'bg-slate-600', accept:'video/*', btnLabel:'Remover áudio' },
@@ -424,6 +449,13 @@
             document.getElementById('ws-title').textContent = activeTool.title;
             document.getElementById('ws-desc').textContent = activeTool.desc;
 
+            const avisoLimite = document.getElementById('ws-limite-aviso');
+            if (avisoLimite) {
+                avisoLimite.innerHTML = (id === 'trim')
+                    ? 'Esta ferramenta <strong>aceita vídeos de qualquer duração</strong>, porque apenas copia o pedaço escolhido, sem recodificar.'
+                    : 'Limite de <strong>' + MAX_MINUTOS + ' minutos</strong> de duração por vídeo. Para arquivos maiores, use antes o <strong>Cortar trecho</strong>, que aceita qualquer duração.';
+            }
+
             const input = document.getElementById('ws-file-input');
             input.accept = activeTool.accept;
             input.value = '';
@@ -466,12 +498,40 @@
             });
         }
 
+        // Limite de duração. Acima disso o navegador fica sem memória ou a
+        // conversão passa de meia hora — melhor avisar antes do que travar.
+        const MAX_MINUTOS = 10;
+
         async function loadFile(file) {
             if (file.size > 800 * 1024 * 1024) {
                 if (!confirm('Este arquivo tem ' + mb(file.size) + ' MB. Arquivos muito grandes podem travar o navegador por falta de memória.' + NL + NL + 'Quer tentar mesmo assim?')) return;
             }
+
+            const info = await probeMedia(file);
+
+            // "Cortar trecho" é justamente a saída para arquivos longos, e não
+            // recodifica nada — por isso ela não entra no limite.
+            const isentaDoLimite = (activeTool && activeTool.id === 'trim');
+            if (!isentaDoLimite && info.duration > MAX_MINUTOS * 60 + 5) {
+                alert('Este vídeo tem ' + formatTime(info.duration) + ', e o limite desta ferramenta é de ' + MAX_MINUTOS + ' minutos.' + NL + NL +
+                    'O motivo é prático: tudo é processado dentro do próprio navegador. Arquivos mais longos costumam travar a aba por falta de memória, ou levar mais de meia hora.' + NL + NL +
+                    'O caminho é separar antes o pedaço que você precisa com a ferramenta "Cortar trecho" — ela aceita vídeos de qualquer duração e fica pronta em segundos, porque não recodifica nada.');
+                if (confirm('Quer abrir agora o "Cortar trecho" com este mesmo vídeo?')) {
+                    openTool('trim');
+                    // Pequena espera para a tela da nova ferramenta montar.
+                    setTimeout(() => aplicarArquivo(file, info), 80);
+                }
+                return;
+            }
+
+            aplicarArquivo(file, info);
+        }
+
+        // Coloca o arquivo no estúdio. Separado de loadFile para que o atalho
+        // do "Cortar trecho" possa reaproveitá-lo sem repetir a verificação.
+        function aplicarArquivo(file, info) {
             selectedFile = file;
-            mediaInfo = await probeMedia(file);
+            mediaInfo = info;
 
             state.trimStart = 0;
             state.trimEnd = mediaInfo.duration || 0;
@@ -1034,8 +1094,39 @@
             }
         };
 
+
+        /* ==================== MENU DOS OUTROS PROGRAMAS ==================== */
+        function toggleAppsMenu(ev) {
+            if (ev) ev.stopPropagation();
+            const menu = document.getElementById('apps-menu');
+            const seta = document.getElementById('apps-menu-arrow');
+            const btn = document.getElementById('apps-menu-btn');
+            if (!menu) return;
+            const abrindo = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', !abrindo);
+            if (seta) seta.style.transform = abrindo ? 'rotate(180deg)' : '';
+            if (btn) btn.setAttribute('aria-expanded', abrindo ? 'true' : 'false');
+        }
+        function fecharAppsMenu() {
+            const menu = document.getElementById('apps-menu');
+            if (!menu || menu.classList.contains('hidden')) return;
+            menu.classList.add('hidden');
+            const seta = document.getElementById('apps-menu-arrow');
+            if (seta) seta.style.transform = '';
+            const btn = document.getElementById('apps-menu-btn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+        // Fecha ao clicar fora ou ao apertar Esc.
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('apps-menu');
+            const btn = document.getElementById('apps-menu-btn');
+            if (!menu || menu.classList.contains('hidden')) return;
+            if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+            fecharAppsMenu();
+        });
+
         Object.assign(window, {
-            VJ, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect,
+            VJ, toggleAppsMenu, showHome, openTool, filterCategory, triggerFileInput, handleFileSelect,
             handleInitialDrop, executeActiveTool, setTheme, toggleDiagModal, reDownloadLast
         });
     })();
